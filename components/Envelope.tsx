@@ -9,7 +9,7 @@ export default function Envelope({ onOpen }: { onOpen: () => void }) {
   const handleClick = () => {
     setOpened(true);
 
-    // Po krátké animaci přejdeme na další stránku
+    // After a short animation, move to the next page
     setTimeout(() => {
       onOpen();
     }, 900);
@@ -39,7 +39,7 @@ export default function Envelope({ onOpen }: { onOpen: () => void }) {
         }}
         className="relative w-[220px] h-[140px] border border-black rounded-lg bg-white overflow-hidden"
       >
-        {/* Klopa */}
+        {/* Flap */}
         <motion.div
           initial={{ rotateX: 0 }}
           animate={{ rotateX: opened ? -180 : 0 }}
@@ -47,7 +47,7 @@ export default function Envelope({ onOpen }: { onOpen: () => void }) {
           className="absolute top-0 left-0 right-0 h-1/2 border-b border-black origin-top bg-white"
         />
 
-        {/* Lístek */}
+        {/* Note */}
         <AnimatePresence>
           {opened && (
             <motion.div
@@ -57,7 +57,7 @@ export default function Envelope({ onOpen }: { onOpen: () => void }) {
               transition={{ duration: 0.6, ease: 'easeOut' }}
               className="absolute inset-0 flex items-center justify-center bg-white"
             >
-              <p className="text-sm text-black">Někdo ti dnes poslal tohle…</p>
+              <p className="text-sm text-black">Someone sent you this…</p>
             </motion.div>
           )}
         </AnimatePresence>

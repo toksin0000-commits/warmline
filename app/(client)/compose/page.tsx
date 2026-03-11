@@ -1,9 +1,9 @@
 'use client';
 
+export const dynamic = "force-dynamic";
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-
 
 export default function ComposePage() {
   const params = useSearchParams();
@@ -29,38 +29,34 @@ export default function ComposePage() {
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-white px-6">
-      {/* Nadpis */}
       <p className="text-black mb-6">
         {mode === 'text'
-          ? 'Napiš něco, co bys sám rád dostal.'
-          : 'Řekni něco, co může někomu zlepšit den.'}
+          ? 'Write something you would love to receive yourself.'
+          : 'Say something that could brighten someone’s day.'}
       </p>
 
-      {/* Textový režim */}
       {mode === 'text' && (
         <textarea
           className="border border-black rounded-xl p-4 w-full max-w-md h-40 text-black"
           maxLength={120}
-          placeholder="Napiš krátkou větu…"
+          placeholder="Write a short sentence…"
           value={text}
           onChange={e => setText(e.target.value)}
         />
       )}
 
-      {/* Hlasový režim */}
       {mode === 'voice' && (
         <div className="border border-black rounded-xl p-8 w-full max-w-md text-center text-black">
-          🎙️ Zde bude nahrávání hlasu (max 5 sekund)
+          🎙️ Voice recording will appear here (max 5 seconds)
         </div>
       )}
 
-      {/* Odeslat */}
       <button
         onClick={send}
         disabled={sending || (mode === 'text' && !text)}
         className="mt-8 border border-black rounded-full px-8 py-3 text-black disabled:opacity-40"
       >
-        {sending ? 'Odesílám…' : 'Odeslat'}
+        {sending ? 'Sending…' : 'Send'}
       </button>
     </div>
   );

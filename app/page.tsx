@@ -15,8 +15,8 @@ export default function HomePage() {
       <Envelope onOpen={openEnvelope} />
 
       <div className="absolute bottom-20 text-center">
-        <p className="text-black">Přišla ti pošta.</p>
-        <p className="text-black">Pošta pro tebe.</p>
+        <p className="text-black">You’ve got mail.</p>
+        <p className="text-black">Mail for you.</p>
       </div>
     </div>
   );
