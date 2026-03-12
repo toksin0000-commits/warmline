@@ -2,10 +2,19 @@
 
 export const dynamic = "force-dynamic";
 
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export default function ComposePage() {
+  return (
+    <Suspense fallback={null}>
+      <InnerComposePage />
+    </Suspense>
+  );
+}
+
+function InnerComposePage() {
   const params = useSearchParams();
   const mode = params.get('mode');
   const router = useRouter();
