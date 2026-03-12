@@ -2,6 +2,6 @@
 
 import { ReactNode } from 'react';
 
-export default function ClientLayout({ children }: { children: ReactNode }) {
+export default function ComposeLayout({ children }: { children: ReactNode }) {
   return children;
 }
