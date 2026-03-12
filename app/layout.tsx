@@ -15,16 +15,15 @@ const geistMono = Geist_Mono({
 
 export default function RootLayout({
   children,
-  compose,
 }: {
   children: React.ReactNode;
-  compose: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         {children}
-        {compose}
       </body>
     </html>
   );
