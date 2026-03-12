@@ -1,7 +1,5 @@
 'use client';
 
-import { ReactNode } from 'react';
-
-export default function ComposeLayout({ children }: { children: ReactNode }) {
+export default function ComposeLayout({ children }: { children: React.ReactNode }) {
   return children;
 }
