@@ -12,116 +12,83 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [micReady, setMicReady] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [micInfo, setMicInfo] = useState<string>('');
-  
+  const [filterEnabled, setFilterEnabled] = useState(true);
+
   const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
 
-  // Inicializace audio kontextu a filtrů
-  const initAudioWithFilter = async () => {
-    try {
-      // Zastavíme předchozí stream
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      }
+  const {
+    status,
+    startRecording: originalStartRecording,
+    stopRecording,
+    mediaBlobUrl,
+    clearBlobUrl
+  } = useReactMediaRecorder({
+    audio: true, // Necháme knihovnu, aby si vyžádala stream
+    onStop: (blobUrl: string, blob: Blob) => {
+      const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+      console.log('🎵 Recording with filter:', {
+        size: sizeMB + 'MB',
+        filter: filterEnabled ? 'High-pass 800Hz' : 'Disabled'
+      });
+      setAudioBlob(blob);
+      onRecordingComplete(blob);
+    }
+  });
 
-      // Získáme stream z mikrofonu
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 96000,
-          channelCount: 2,
-          sampleSize: 24,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        }
-      });
+  // Inicializace mikrofonu a filtru
+  useEffect(() => {
+    const setupAudio = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 96000,
+            channelCount: 2,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        });
 
-      mediaStreamRef.current = stream;
-      
-      // Vytvoříme AudioContext
-      const audioContext = new AudioContext({
-        sampleRate: 96000,
-        latencyHint: 'interactive'
-      });
-      
-      audioContextRef.current = audioContext;
-      
-      // Vytvoříme zdroj ze streamu
-      const source = audioContext.createMediaStreamSource(stream);
-      
-      // HIGH-PASS FILTER (odstranění basů)
-      // Frekvence pod 800 Hz budou zeslabeny (necháváme středy a výšky)
-      const highPassFilter = audioContext.createBiquadFilter();
-      highPassFilter.type = 'highpass';
-      highPassFilter.frequency.value = 800; // Hraniční frekvence
-      highPassFilter.Q.value = 0.7; // Mírný náběh, přirozený zvuk
-      
-      // Volitelně můžeme přidat i lehký low-pass pro odstranění šumu (ale necháme výšky)
-      // const lowPassFilter = audioContext.createBiquadFilter();
-      // lowPassFilter.type = 'lowpass';
-      // lowPassFilter.frequency.value = 12000; // Propustí vše do 12 kHz
-      
-      // Propojíme: source -> highPassFilter -> destination (pro monitoring)
-      source.connect(highPassFilter);
-      highPassFilter.connect(audioContext.destination);
-      
-      // Vytvoříme MediaStreamDestination pro nahrávání
-      const destination = audioContext.createMediaStreamDestination();
-      highPassFilter.connect(destination);
-      
-      // MediaRecorder pro upravený stream
-      const mediaRecorder = new MediaRecorder(destination.stream, {
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 320000,
-      });
-      
-      mediaRecorderRef.current = mediaRecorder;
-      
-      chunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
-        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        const track = stream.getAudioTracks()[0];
+        const settings = track.getSettings();
         
-        console.log('🎵 Filtered recording:', {
-          size: sizeMB + 'MB',
-          filter: 'High-pass 800 Hz',
-          frequencies: 'Mids & Highs preserved'
+        setMicInfo(`${settings.sampleRate || 48000}Hz · Voice Optimized`);
+        
+        // Vytvoříme AudioContext a filtr pro monitoring
+        const audioContext = new AudioContext({
+          sampleRate: 96000,
+          latencyHint: 'interactive'
         });
         
-        setAudioBlob(blob);
-        onRecordingComplete(blob);
+        audioContextRef.current = audioContext;
         
-        // Vyčistíme
-        chunksRef.current = [];
-      };
-      
-      setMicInfo(`${stream.getAudioTracks()[0].getSettings().sampleRate}Hz · Voice Optimized`);
-      setMicReady(true);
-      
-    } catch (err) {
-      console.error('Audio setup error:', err);
-    }
-  };
-
-  // Inicializace při načtení
-  useEffect(() => {
-    initAudioWithFilter();
-    
-    return () => {
-      // Cleanup
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        const source = audioContext.createMediaStreamSource(stream);
+        sourceRef.current = source;
+        
+        // High-pass filter na 800 Hz
+        const filter = audioContext.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 800;
+        filter.Q.value = 0.7;
+        filterRef.current = filter;
+        
+        // Zapojíme filtr pouze pro monitoring (slyšíš filtrovaný zvuk)
+        source.connect(filter);
+        filter.connect(audioContext.destination);
+        
+        // Stream necháme otevřený pro knihovnu
+        setMicReady(true);
+        
+      } catch (err) {
+        console.error('Microphone error:', err);
       }
+    };
+
+    setupAudio();
+
+    return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
@@ -131,7 +98,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   // Timer pro odpočítávání
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (mediaRecorderRef.current?.state === 'recording') {
+    if (status === 'recording') {
       interval = setInterval(() => {
         setRecordingTime(prev => {
           const newTime = prev + 1;
@@ -146,30 +113,33 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
       setRecordingTime(0);
     }
     return () => clearInterval(interval);
-  }, [mediaRecorderRef.current?.state]);
+  }, [status, stopRecording]);
 
-  const startRecording = () => {
-    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'recording') return;
-    
-    chunksRef.current = [];
-    mediaRecorderRef.current.start(100); // Sbíráme data každých 100ms
+  const handleStartRecording = () => {
+    if (!micReady) return;
     setRecordingTime(0);
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+    originalStartRecording();
   };
 
   const resetRecording = (): void => {
     setAudioBlob(null);
-    chunksRef.current = [];
+    clearBlobUrl();
   };
 
-  const handleStartRecording = () => {
-    if (!micReady) return;
-    startRecording();
+  const toggleFilter = () => {
+    if (filterRef.current && audioContextRef.current) {
+      if (filterEnabled) {
+        // Vypneme filtr - zapojíme source přímo do destination
+        sourceRef.current?.disconnect();
+        sourceRef.current?.connect(audioContextRef.current.destination);
+      } else {
+        // Zapneme filtr
+        sourceRef.current?.disconnect();
+        sourceRef.current?.connect(filterRef.current);
+        filterRef.current?.connect(audioContextRef.current.destination);
+      }
+      setFilterEnabled(!filterEnabled);
+    }
   };
 
   const formatTime = (seconds: number): string => {
@@ -180,17 +150,20 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     return (recordingTime / 8) * 100;
   };
 
-  const isRecording = mediaRecorderRef.current?.state === 'recording';
-
   return (
     <div className="border border-black rounded-xl p-8 w-full max-w-md">
       {/* Status bar */}
       <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
         <span>{micInfo || 'Initializing microphone...'}</span>
-        <span className="font-mono">Voice Optimized</span>
+        <button 
+          onClick={toggleFilter}
+          className={`px-2 py-1 rounded ${filterEnabled ? 'bg-black text-white' : 'bg-gray-200 text-black'}`}
+        >
+          {filterEnabled ? 'Filter ON' : 'Filter OFF'}
+        </button>
       </div>
 
-      {isRecording ? (
+      {status === 'recording' ? (
         <div className="space-y-6">
           {/* Timer with progress bar */}
           <div className="space-y-2">
@@ -213,9 +186,9 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
             Stop Recording
           </button>
         </div>
-      ) : audioBlob ? (
+      ) : mediaBlobUrl ? (
         <div className="space-y-4">
-          <audio src={URL.createObjectURL(audioBlob)} controls className="w-full" />
+          <audio src={mediaBlobUrl} controls className="w-full" />
           <div className="flex gap-2 justify-center">
             <button
               onClick={resetRecording}
