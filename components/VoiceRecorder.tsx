@@ -12,11 +12,6 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [micReady, setMicReady] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [micInfo, setMicInfo] = useState<string>('');
-  const [filterEnabled, setFilterEnabled] = useState(true);
-
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const filterRef = useRef<BiquadFilterNode | null>(null);
 
   const {
     status,
@@ -25,60 +20,52 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     mediaBlobUrl,
     clearBlobUrl
   } = useReactMediaRecorder({
-    audio: true, // Necháme knihovnu, aby si vyžádala stream
+    audio: {
+      sampleRate: 96000,
+      channelCount: 2,
+      echoCancellation: true,      // ✅ ZAPNUTO - potlačí ozvěnu
+      noiseSuppression: true,       // ✅ ZAPNUTO - potlačí šum
+      autoGainControl: true,        // ✅ ZAPNUTO - vyrovná hlasitost
+    } as MediaTrackConstraints,
+    blobPropertyBag: {
+      type: 'audio/webm;codecs=opus',
+    },
+    mediaRecorderOptions: {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 256000,
+    },
     onStop: (blobUrl: string, blob: Blob) => {
       const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      console.log('🎵 Recording with filter:', {
+      console.log('🎵 Recording:', {
         size: sizeMB + 'MB',
-        filter: filterEnabled ? 'High-pass 800Hz' : 'Disabled'
+        settings: 'echo cancellation ON'
       });
       setAudioBlob(blob);
       onRecordingComplete(blob);
     }
   });
 
-  // Inicializace mikrofonu a filtru
+  // Inicializace mikrofonu - pouze zjistíme info, žádný monitoring
   useEffect(() => {
-    const setupAudio = async () => {
+    const checkMicrophone = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             sampleRate: 96000,
             channelCount: 2,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
           }
         });
 
         const track = stream.getAudioTracks()[0];
         const settings = track.getSettings();
         
-        setMicInfo(`${settings.sampleRate || 48000}Hz · Voice Optimized`);
+        setMicInfo(`${settings.sampleRate || 48000}Hz · Ready`);
         
-        // Vytvoříme AudioContext a filtr pro monitoring
-        const audioContext = new AudioContext({
-          sampleRate: 96000,
-          latencyHint: 'interactive'
-        });
-        
-        audioContextRef.current = audioContext;
-        
-        const source = audioContext.createMediaStreamSource(stream);
-        sourceRef.current = source;
-        
-        // High-pass filter na 800 Hz
-        const filter = audioContext.createBiquadFilter();
-        filter.type = 'highpass';
-        filter.frequency.value = 800;
-        filter.Q.value = 0.7;
-        filterRef.current = filter;
-        
-        // Zapojíme filtr pouze pro monitoring (slyšíš filtrovaný zvuk)
-        source.connect(filter);
-        filter.connect(audioContext.destination);
-        
-        // Stream necháme otevřený pro knihovnu
+        // OKAMŽITĚ zastavíme stream - nechceme monitoring
+        stream.getTracks().forEach(track => track.stop());
         setMicReady(true);
         
       } catch (err) {
@@ -86,13 +73,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
       }
     };
 
-    setupAudio();
-
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
+    checkMicrophone();
   }, []);
 
   // Timer pro odpočítávání
@@ -126,22 +107,6 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl();
   };
 
-  const toggleFilter = () => {
-    if (filterRef.current && audioContextRef.current) {
-      if (filterEnabled) {
-        // Vypneme filtr - zapojíme source přímo do destination
-        sourceRef.current?.disconnect();
-        sourceRef.current?.connect(audioContextRef.current.destination);
-      } else {
-        // Zapneme filtr
-        sourceRef.current?.disconnect();
-        sourceRef.current?.connect(filterRef.current);
-        filterRef.current?.connect(audioContextRef.current.destination);
-      }
-      setFilterEnabled(!filterEnabled);
-    }
-  };
-
   const formatTime = (seconds: number): string => {
     return `${seconds}s / 8s`;
   };
@@ -155,12 +120,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
       {/* Status bar */}
       <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
         <span>{micInfo || 'Initializing microphone...'}</span>
-        <button 
-          onClick={toggleFilter}
-          className={`px-2 py-1 rounded ${filterEnabled ? 'bg-black text-white' : 'bg-gray-200 text-black'}`}
-        >
-          {filterEnabled ? 'Filter ON' : 'Filter OFF'}
-        </button>
+        <span className="font-mono">Studio Quality</span>
       </div>
 
       {status === 'recording' ? (
