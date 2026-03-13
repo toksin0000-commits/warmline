@@ -16,7 +16,8 @@ export default function MessagePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/message')
+    // ✅ ZMĚNA: /api/message → /api/messages/random
+    fetch('/api/messages/random')
       .then(async r => {
         if (!r.ok) {
           throw new Error('Failed to fetch message');
