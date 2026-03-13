@@ -51,7 +51,17 @@ function InnerComposePage() {
       if (mode === 'voice' && audioBlob) {
         // Pro voice nejdřív nahrajeme audio na server
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
+        
+        // ✅ Dynamický název podle typu souboru
+        const fileExtension = audioBlob.type.includes('wav') ? 'wav' : 'webm';
+        const fileName = `recording-${Date.now()}.${fileExtension}`;
+        formData.append('audio', audioBlob, fileName);
+        
+        console.log('Uploading:', {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          name: fileName
+        });
         
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
@@ -59,11 +69,12 @@ function InnerComposePage() {
         });
         
         if (!uploadRes.ok) {
-          const error = await uploadRes.json();
-          throw new Error(error.error || 'Upload failed');
+          const errorData = await uploadRes.json().catch(() => ({}));
+          throw new Error(errorData.error || `Upload failed (${uploadRes.status})`);
         }
         
         const { url } = await uploadRes.json();
+        console.log('Upload success:', url);
         
         const sendRes = await fetch('/api/send', {
           method: 'POST',
@@ -77,7 +88,8 @@ function InnerComposePage() {
         });
 
         if (!sendRes.ok) {
-          throw new Error('Failed to save message');
+          const errorData = await sendRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to save message');
         }
       } else if (mode === 'text' && text.trim()) {
         // Pro textové zprávy
@@ -93,7 +105,8 @@ function InnerComposePage() {
         });
 
         if (!sendRes.ok) {
-          throw new Error('Failed to save message');
+          const errorData = await sendRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to save message');
         }
       } else {
         throw new Error('No message to send');
@@ -103,11 +116,15 @@ function InnerComposePage() {
     } catch (error) {
       console.error('Error sending message:', error);
       setSending(false);
-      alert('Failed to send message. Please try again.');
+      alert(`Failed to send message: ${error instanceof Error ? error.message : 'Please try again'}`);
     }
   };
 
   const handleRecordingComplete = (blob: Blob): void => {
+    console.log('Recording complete:', {
+      size: blob.size,
+      type: blob.type
+    });
     setAudioBlob(blob);
   };
 
