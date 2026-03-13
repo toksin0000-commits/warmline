@@ -12,31 +12,14 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [micReady, setMicReady] = useState(false);
 
   useEffect(() => {
-    // Zkontrolujeme, co mikrofon umí
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
         const track = stream.getAudioTracks()[0];
-        const capabilities = track.getCapabilities?.() || {};
-        const settings = track.getSettings();
-        
-        console.log('🎤 Mikrofon:', {
-          label: track.label,
-          capabilities: {
-            sampleRate: capabilities.sampleRate,
-            channelCount: capabilities.channelCount,
-          },
-          current: {
-            sampleRate: settings.sampleRate,
-            channelCount: settings.channelCount,
-          }
-        });
-        
+        console.log('🎤 Mikrofon:', track.label);
         stream.getTracks().forEach(track => track.stop());
         setMicReady(true);
       })
-      .catch(err => {
-        console.error('Mikrofon error:', err);
-      });
+      .catch(err => console.error('Mikrofon error:', err));
   }, []);
 
   const {
@@ -47,37 +30,34 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      // NEJVYŠŠÍ MOŽNÁ KVALITA
-      sampleRate: 96000,           // 96 kHz - studiová kvalita
-      channelCount: 2,              // Stereo pro větší prostor
+      // OPTIMÁLNÍ KVALITA
+      sampleRate: 48000,           // 48 kHz - CD kvalita
+      channelCount: 2,              // Stereo pro prostor
       
-      // VŠECHNO VYPNUTO - žádné úpravy
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
+      // Minimální úpravy
+      echoCancellation: true,       // Necháme jen echo cancellation
+      noiseSuppression: false,      // Vypnuto - zachová výšky
+      autoGainControl: false,       // Vypnuto - přirozená dynamika
       
-      // Další parametry pro maximální kvalitu
       latency: 0,
-      volume: 1.0,
     } as MediaTrackConstraints,
     
-    // NEJLEPŠÍ FORMÁT
+    // Nejlepší kompromis kvalita/velikost
     blobPropertyBag: {
-      type: 'audio/webm;codecs=pcm', // Pokus o PCM (nekomprimovaný)
+      type: 'audio/webm;codecs=opus',
     },
     
     mediaRecorderOptions: {
-      mimeType: 'audio/webm;codecs=pcm',
-      audioBitsPerSecond: 1536000,    // 96kHz * 16bit = 1.5 Mbps
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 320000,    // 320 kbps - velmi kvalitní
     },
     
     onStop: (blobUrl: string, blob: Blob) => {
-      console.log('🎵 HI-RES Audio:', {
-        size: (blob.size / 1024 / 1024).toFixed(2) + ' MB',
-        type: blob.type,
-        bitrate: (blob.size * 8 / 5 / 1000).toFixed(0) + ' kbps',
-        frequency: '96 kHz',
-        channels: 'Stereo'
+      const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+      console.log('🎵 Optimální kvalita:', {
+        size: sizeMB + ' MB',
+        bitrate: '320 kbps',
+        kvalita: 'CD kvalita'
       });
       setAudioBlob(blob);
       onRecordingComplete(blob);
@@ -106,22 +86,23 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
       <div className="text-xs text-gray-400 mb-2 flex justify-center gap-3">
         <span className={micReady ? 'text-green-600' : 'text-red-600'}>
-          {micReady ? '🎤 Mikrofon OK' : '⏳ Kontrola mikrofonu...'}
+          {micReady ? '🎤 Připraven' : '⏳ Čekám na mikrofon...'}
         </span>
-        <span>96 kHz Stereo</span>
+        <span>48 kHz Stereo</span>
+        <span>320 kbps</span>
       </div>
 
       {status === 'recording' ? (
         <div className="space-y-4">
           <div className="flex items-center justify-center gap-2">
             <span className="animate-pulse text-red-500">🔴</span>
-            <span className="text-black">Recording... (max 5 seconds)</span>
+            <span className="text-black">Nahrávání... (max 5 vteřin)</span>
           </div>
           <button
             onClick={stopRecording}
             className="border border-black rounded-full px-6 py-2 text-black hover:bg-black hover:text-white transition-colors"
           >
-            Stop Recording
+            Stop
           </button>
         </div>
       ) : mediaBlobUrl ? (
@@ -132,7 +113,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
               onClick={resetRecording}
               className="border border-black rounded-full px-4 py-1 text-sm text-black hover:bg-black hover:text-white transition-colors"
             >
-              Record Again
+              Nahrát znovu
             </button>
           </div>
         </div>
@@ -142,7 +123,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           disabled={!micReady}
           className="border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
         >
-          Start Recording
+          Nahrát zprávu
         </button>
       )}
     </div>
