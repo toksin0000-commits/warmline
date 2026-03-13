@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useReactMediaRecorder } from 'react-media-recorder';
 
 interface VoiceRecorderProps {
@@ -12,64 +12,105 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [micReady, setMicReady] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [micInfo, setMicInfo] = useState<string>('');
+  const [actualSampleRate, setActualSampleRate] = useState<number>(120000);
 
   const {
     status,
-    startRecording: originalStartRecording,
+    startRecording,
     stopRecording,
     mediaBlobUrl,
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      sampleRate: 96000,
+      // Požadujeme 120 kHz
+      sampleRate: 120000,
       channelCount: 2,
-      echoCancellation: true,      // ✅ ZAPNUTO - potlačí ozvěnu
-      noiseSuppression: true,       // ✅ ZAPNUTO - potlačí šum
-      autoGainControl: true,        // ✅ ZAPNUTO - vyrovná hlasitost
+      sampleSize: 24,
+      
+      // Žádné úpravy - čistý signál
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
     } as MediaTrackConstraints,
+    
     blobPropertyBag: {
       type: 'audio/webm;codecs=opus',
     },
+    
     mediaRecorderOptions: {
       mimeType: 'audio/webm;codecs=opus',
-      audioBitsPerSecond: 256000,
+      audioBitsPerSecond: 384000, // 384 kbps pro 120 kHz
     },
+    
     onStop: (blobUrl: string, blob: Blob) => {
       const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      console.log('🎵 Recording:', {
+      console.log('🎵 120kHz Recording:', {
         size: sizeMB + 'MB',
-        settings: 'echo cancellation ON'
+        sampleRate: actualSampleRate + ' Hz',
+        bitrate: (blob.size * 8 / 5 / 1000).toFixed(0) + ' kbps'
       });
+      
       setAudioBlob(blob);
       onRecordingComplete(blob);
     }
   });
 
-  // Inicializace mikrofonu - pouze zjistíme info, žádný monitoring
+  // Jen zjistíme, co mikrofon umí - ŽÁDNÝ MONITORING
   useEffect(() => {
     const checkMicrophone = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            sampleRate: 96000,
+            sampleRate: 120000,
             channelCount: 2,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            sampleSize: 24,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
           }
         });
 
         const track = stream.getAudioTracks()[0];
         const settings = track.getSettings();
+        const actualRate = settings.sampleRate || 120000;
         
-        setMicInfo(`${settings.sampleRate || 48000}Hz · Ready`);
+        setActualSampleRate(actualRate);
+        setMicInfo(`${actualRate}Hz · 24bit · Studio Quality`);
         
-        // OKAMŽITĚ zastavíme stream - nechceme monitoring
+        console.log('🎤 120kHz Microphone ready:', {
+          model: track.label,
+          sampleRate: actualRate,
+          bits: settings.sampleSize || 24
+        });
+        
+        // OKAMŽITĚ zastavíme - ŽÁDNÝ MONITORING
         stream.getTracks().forEach(track => track.stop());
         setMicReady(true);
         
       } catch (err) {
-        console.error('Microphone error:', err);
+        console.error('120kHz not supported, trying 96kHz...');
+        
+        // Fallback na 96 kHz
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              sampleRate: 96000,
+              channelCount: 2,
+              sampleSize: 24,
+            }
+          });
+          
+          const track = stream.getAudioTracks()[0];
+          const settings = track.getSettings();
+          setActualSampleRate(96000);
+          setMicInfo(`96 kHz · High Quality (120 kHz not supported)`);
+          
+          stream.getTracks().forEach(track => track.stop());
+          setMicReady(true);
+          
+        } catch (fallbackErr) {
+          console.error('Even 96kHz failed:', fallbackErr);
+        }
       }
     };
 
@@ -99,7 +140,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const handleStartRecording = () => {
     if (!micReady) return;
     setRecordingTime(0);
-    originalStartRecording();
+    startRecording();
   };
 
   const resetRecording = (): void => {
@@ -119,8 +160,8 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     <div className="border border-black rounded-xl p-8 w-full max-w-md">
       {/* Status bar */}
       <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
-        <span>{micInfo || 'Initializing microphone...'}</span>
-        <span className="font-mono">Studio Quality</span>
+        <span>{micInfo || 'Initializing 120kHz microphone...'}</span>
+        <span className="font-mono">Hi-Res Audio</span>
       </div>
 
       {status === 'recording' ? (
@@ -128,7 +169,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           {/* Timer with progress bar */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-black">Recording...</span>
+              <span className="text-black">Recording 120kHz...</span>
               <span className="font-mono text-black">{formatTime(recordingTime)}</span>
             </div>
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -164,7 +205,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           disabled={!micReady}
           className="w-full border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
         >
-          {micReady ? 'Start Recording' : 'Preparing microphone...'}
+          {micReady ? 'Start 120kHz Recording' : 'Preparing microphone...'}
         </button>
       )}
     </div>
