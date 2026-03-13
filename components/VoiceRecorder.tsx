@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useReactMediaRecorder } from 'react-media-recorder';
 
 interface VoiceRecorderProps {
@@ -9,160 +9,229 @@ interface VoiceRecorderProps {
 
 export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [micInfo, setMicInfo] = useState<{
-    label: string;
-    maxSampleRate: number;
-    supported: boolean;
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [micReady, setMicReady] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [micInfo, setMicInfo] = useState<string>('');
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
+  // Inicializace audio kontextu a filtrů
+  const initAudioWithFilter = async () => {
+    try {
+      // Zastavíme předchozí stream
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      // Získáme stream z mikrofonu
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 96000,
+          channelCount: 2,
+          sampleSize: 24,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
+
+      mediaStreamRef.current = stream;
+      
+      // Vytvoříme AudioContext
+      const audioContext = new AudioContext({
+        sampleRate: 96000,
+        latencyHint: 'interactive'
+      });
+      
+      audioContextRef.current = audioContext;
+      
+      // Vytvoříme zdroj ze streamu
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      // HIGH-PASS FILTER (odstranění basů)
+      // Frekvence pod 800 Hz budou zeslabeny (necháváme středy a výšky)
+      const highPassFilter = audioContext.createBiquadFilter();
+      highPassFilter.type = 'highpass';
+      highPassFilter.frequency.value = 800; // Hraniční frekvence
+      highPassFilter.Q.value = 0.7; // Mírný náběh, přirozený zvuk
+      
+      // Volitelně můžeme přidat i lehký low-pass pro odstranění šumu (ale necháme výšky)
+      // const lowPassFilter = audioContext.createBiquadFilter();
+      // lowPassFilter.type = 'lowpass';
+      // lowPassFilter.frequency.value = 12000; // Propustí vše do 12 kHz
+      
+      // Propojíme: source -> highPassFilter -> destination (pro monitoring)
+      source.connect(highPassFilter);
+      highPassFilter.connect(audioContext.destination);
+      
+      // Vytvoříme MediaStreamDestination pro nahrávání
+      const destination = audioContext.createMediaStreamDestination();
+      highPassFilter.connect(destination);
+      
+      // MediaRecorder pro upravený stream
+      const mediaRecorder = new MediaRecorder(destination.stream, {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 320000,
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      
+      chunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        
+        console.log('🎵 Filtered recording:', {
+          size: sizeMB + 'MB',
+          filter: 'High-pass 800 Hz',
+          frequencies: 'Mids & Highs preserved'
+        });
+        
+        setAudioBlob(blob);
+        onRecordingComplete(blob);
+        
+        // Vyčistíme
+        chunksRef.current = [];
+      };
+      
+      setMicInfo(`${stream.getAudioTracks()[0].getSettings().sampleRate}Hz · Voice Optimized`);
+      setMicReady(true);
+      
+    } catch (err) {
+      console.error('Audio setup error:', err);
+    }
+  };
+
+  // Inicializace při načtení
   useEffect(() => {
-    // Zjistíme, co mikrofon umí
-    navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        sampleRate: 120000, // Požádáme o maximum
-        channelCount: 2,
-        sampleSize: 24,
-      } 
-    })
-    .then(stream => {
-      const track = stream.getAudioTracks()[0];
-      const settings = track.getSettings();
-      
-      setMicInfo({
-        label: track.label,
-        maxSampleRate: settings.sampleRate || 48000,
-        supported: true
-      });
-      
-      console.log('🎤 Mikrofon:', {
-        model: track.label,
-        sampleRate: settings.sampleRate,
-        channels: settings.channelCount,
-        sampleSize: settings.sampleSize
-      });
-      
-      stream.getTracks().forEach(track => track.stop());
-    })
-    .catch(err => {
-      console.error('Mikrofon error:', err);
-      setError('Mikrofon není k dispozici');
-    });
+    initAudioWithFilter();
+    
+    return () => {
+      // Cleanup
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
   }, []);
 
-  const {
-    status,
-    startRecording,
-    stopRecording,
-    mediaBlobUrl,
-    clearBlobUrl
-  } = useReactMediaRecorder({
-    audio: {
-      // Požádáme o maximum, prohlížeč dá co může
-      sampleRate: 120000,
-      sampleSize: 24,
-      channelCount: 2,
-      
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    } as MediaTrackConstraints,
-    
-    blobPropertyBag: {
-      type: 'audio/wav', // Nekomprimovaný WAV
-    },
-    
-    onStop: (blobUrl: string, blob: Blob) => {
-      const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      const sampleRate = micInfo?.maxSampleRate || 48000;
-      
-      console.log('🎵 Ultra kvalita:', {
-        velikost: sizeMB + ' MB',
-        sampleRate: sampleRate + ' Hz',
-        limit: '4.5 MB',
-        vlimitu: parseFloat(sizeMB) < 4.5 ? '✅ Ano' : '❌ Ne'
-      });
-      
-      setAudioBlob(blob);
-      onRecordingComplete(blob);
+  // Timer pro odpočítávání
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (mediaRecorderRef.current?.state === 'recording') {
+      interval = setInterval(() => {
+        setRecordingTime(prev => {
+          const newTime = prev + 1;
+          if (newTime >= 8) {
+            stopRecording();
+            return 8;
+          }
+          return newTime;
+        });
+      }, 1000);
+    } else {
+      setRecordingTime(0);
     }
-  });
+    return () => clearInterval(interval);
+  }, [mediaRecorderRef.current?.state]);
+
+  const startRecording = () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'recording') return;
+    
+    chunksRef.current = [];
+    mediaRecorderRef.current.start(100); // Sbíráme data každých 100ms
+    setRecordingTime(0);
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
 
   const resetRecording = (): void => {
     setAudioBlob(null);
-    clearBlobUrl();
+    chunksRef.current = [];
   };
 
   const handleStartRecording = () => {
-    if (!micInfo?.supported) {
-      alert('Mikrofon není připraven');
-      return;
-    }
+    if (!micReady) return;
     startRecording();
-    setTimeout(() => {
-      if (status === 'recording') {
-        stopRecording();
-      }
-    }, 5000);
   };
 
-  if (error) {
-    return (
-      <div className="border border-red-300 rounded-xl p-8 w-full max-w-md text-center">
-        <p className="text-red-600">{error}</p>
-      </div>
-    );
-  }
+  const formatTime = (seconds: number): string => {
+    return `${seconds}s / 8s`;
+  };
+
+  const getProgressPercentage = (): number => {
+    return (recordingTime / 8) * 100;
+  };
+
+  const isRecording = mediaRecorderRef.current?.state === 'recording';
 
   return (
-    <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
-      <div className="text-xs text-gray-400 mb-2 space-y-1">
-        <div className="flex justify-center gap-3">
-          <span className={micInfo ? 'text-green-600' : 'text-yellow-600'}>
-            {micInfo ? '🎤 ' + micInfo.label : '⏳ Kontrola mikrofonu...'}
-          </span>
-        </div>
-        {micInfo && (
-          <div className="flex justify-center gap-3 text-gray-500">
-            <span>{micInfo.maxSampleRate} Hz</span>
-            <span>24-bit</span>
-            <span>Stereo</span>
-          </div>
-        )}
+    <div className="border border-black rounded-xl p-8 w-full max-w-md">
+      {/* Status bar */}
+      <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
+        <span>{micInfo || 'Initializing microphone...'}</span>
+        <span className="font-mono">Voice Optimized</span>
       </div>
 
-      {status === 'recording' ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-center gap-2">
-            <span className="animate-pulse text-red-500">🔴</span>
-            <span className="text-black">Nahrávání... (max 5 vteřin)</span>
+      {isRecording ? (
+        <div className="space-y-6">
+          {/* Timer with progress bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-black">Recording...</span>
+              <span className="font-mono text-black">{formatTime(recordingTime)}</span>
+            </div>
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-black transition-all duration-200"
+                style={{ width: `${getProgressPercentage()}%` }}
+              />
+            </div>
           </div>
+          
           <button
             onClick={stopRecording}
-            className="border border-black rounded-full px-6 py-2 text-black hover:bg-black hover:text-white transition-colors"
+            className="w-full border border-black rounded-full px-6 py-3 text-black hover:bg-black hover:text-white transition-colors"
           >
-            Stop
+            Stop Recording
           </button>
         </div>
-      ) : mediaBlobUrl ? (
+      ) : audioBlob ? (
         <div className="space-y-4">
-          <audio src={mediaBlobUrl} controls className="w-full" />
+          <audio src={URL.createObjectURL(audioBlob)} controls className="w-full" />
           <div className="flex gap-2 justify-center">
             <button
               onClick={resetRecording}
-              className="border border-black rounded-full px-4 py-1 text-sm text-black hover:bg-black hover:text-white transition-colors"
+              className="flex-1 border border-black rounded-full px-4 py-2 text-sm text-black hover:bg-black hover:text-white transition-colors"
             >
-              Nahrát znovu
+              Record Again
             </button>
           </div>
         </div>
       ) : (
         <button
           onClick={handleStartRecording}
-          disabled={!micInfo}
-          className="border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+          disabled={!micReady}
+          className="w-full border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
         >
-          Nahrát zprávu
+          {micReady ? 'Start Recording' : 'Preparing microphone...'}
         </button>
       )}
     </div>
