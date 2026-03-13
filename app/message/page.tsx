@@ -47,14 +47,20 @@ export default function MessagePage() {
 
   if (error || !message) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-white px-6">
-        <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
-          <p className="text-black mb-4">
-            {error || 'No messages yet. Be the first to send one!'}
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6">
+        <div className="border border-black rounded-xl p-12 w-full max-w-md text-center">
+          <div className="text-6xl mb-4">📭</div>
+          <h2 className="text-2xl font-light text-black mb-2">
+            {error ? 'Something went wrong' : 'No messages yet'}
+          </h2>
+          <p className="text-gray-600 mb-8">
+            {error 
+              ? 'Please try again later.' 
+              : 'Be the first to send someone a kind word!'}
           </p>
           <Link
             href="/compose?mode=text"
-            className="inline-block border border-black rounded-full px-6 py-2 text-black hover:bg-black hover:text-white transition-colors"
+            className="inline-block border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors"
           >
             Write a message
           </Link>
