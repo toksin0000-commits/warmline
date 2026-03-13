@@ -30,34 +30,32 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      // OPTIMÁLNÍ KVALITA
-      sampleRate: 48000,           // 48 kHz - CD kvalita
+      // VYSOKÝ VZORKOVACÍ KMITOČET pro výšky
+      sampleRate: 96000,           // 96 kHz - zachytí všechny výšky
       channelCount: 2,              // Stereo pro prostor
       
-      // Minimální úpravy
-      echoCancellation: true,       // Necháme jen echo cancellation
-      noiseSuppression: false,      // Vypnuto - zachová výšky
-      autoGainControl: false,       // Vypnuto - přirozená dynamika
-      
-      latency: 0,
+      echoCancellation: true,
+      noiseSuppression: false,
+      autoGainControl: false,
     } as MediaTrackConstraints,
     
-    // Nejlepší kompromis kvalita/velikost
+    // Použijeme OPUS, který umí dobře komprimovat i vysoké frekvence
     blobPropertyBag: {
       type: 'audio/webm;codecs=opus',
     },
     
     mediaRecorderOptions: {
       mimeType: 'audio/webm;codecs=opus',
-      audioBitsPerSecond: 320000,    // 320 kbps - velmi kvalitní
+      audioBitsPerSecond: 256000,    // 256 kbps - kompromis
     },
     
     onStop: (blobUrl: string, blob: Blob) => {
       const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      console.log('🎵 Optimální kvalita:', {
+      console.log('🎵 96 kHz komprimováno:', {
         size: sizeMB + ' MB',
-        bitrate: '320 kbps',
-        kvalita: 'CD kvalita'
+        bitrate: '256 kbps',
+        sampleRate: '96 kHz',
+        kvalita: 'Vysoké výšky zachovány'
       });
       setAudioBlob(blob);
       onRecordingComplete(blob);
@@ -85,11 +83,9 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   return (
     <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
       <div className="text-xs text-gray-400 mb-2 flex justify-center gap-3">
-        <span className={micReady ? 'text-green-600' : 'text-red-600'}>
-          {micReady ? '🎤 Připraven' : '⏳ Čekám na mikrofon...'}
-        </span>
-        <span>48 kHz Stereo</span>
-        <span>320 kbps</span>
+        <span>96 kHz Stereo</span>
+        <span>256 kbps</span>
+        <span>~1.5 MB</span>
       </div>
 
       {status === 'recording' ? (
