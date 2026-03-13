@@ -7,6 +7,7 @@ import { Message } from '@/types/message';
 export default function AdminPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
@@ -15,12 +16,40 @@ export default function AdminPage() {
   }, []);
 
   const fetchMessages = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      const res = await fetch('/api/messages');
+      console.log('Fetching messages...');
+      const res = await fetch('/api/messages', {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      console.log('Response status:', res.status);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
+      }
+      
       const data = await res.json();
-      setMessages(data);
+      console.log('Received data:', data);
+      
+      if (Array.isArray(data)) {
+        setMessages(data);
+        console.log(`Loaded ${data.length} messages`);
+      } else {
+        console.error('Data is not an array:', data);
+        setError('Invalid data format received');
+        setMessages([]);
+      }
     } catch (error) {
       console.error('Failed to fetch messages:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -58,6 +87,7 @@ export default function AdminPage() {
       await fetchMessages();
     } catch (error) {
       console.error('Failed to delete messages:', error);
+      alert('Failed to delete some messages');
     } finally {
       setDeleting(false);
     }
@@ -68,11 +98,14 @@ export default function AdminPage() {
     
     setDeleting(true);
     try {
-      await fetch('/api/clear', { method: 'POST' });
+      const res = await fetch('/api/clear', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to clear messages');
+      
       setSelectedIds(new Set());
       await fetchMessages();
     } catch (error) {
       console.error('Failed to delete all messages:', error);
+      alert('Failed to delete all messages');
     } finally {
       setDeleting(false);
     }
@@ -87,10 +120,36 @@ export default function AdminPage() {
     });
   };
 
+  // Debug info
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+            <h2 className="text-red-700 font-medium mb-2">Error Loading Messages</h2>
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={fetchMessages}
+              className="border border-red-500 rounded-full px-4 py-2 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+          <Link href="/" className="text-sm text-gray-500 hover:text-black">
+            ← Back to home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <p className="text-black">Loading messages...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+          <p className="text-black">Loading messages...</p>
+        </div>
       </div>
     );
   }
@@ -100,9 +159,18 @@ export default function AdminPage() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-light text-black">Admin Panel</h1>
-          <Link href="/" className="text-sm text-gray-500 hover:text-black">
-            ← Back to home
-          </Link>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchMessages}
+              className="text-sm text-gray-500 hover:text-black transition-colors"
+              title="Refresh"
+            >
+              🔄 Refresh
+            </button>
+            <Link href="/" className="text-sm text-gray-500 hover:text-black">
+              ← Back
+            </Link>
+          </div>
         </div>
 
         <div className="bg-white border border-black rounded-xl p-6 mb-6">
@@ -119,14 +187,14 @@ export default function AdminPage() {
                 disabled={selectedIds.size === 0 || deleting}
                 className="border border-red-500 rounded-full px-4 py-1 text-sm text-red-500 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-40"
               >
-                Delete Selected ({selectedIds.size})
+                {deleting ? 'Deleting...' : `Delete Selected (${selectedIds.size})`}
               </button>
               <button
                 onClick={deleteAll}
                 disabled={messages.length === 0 || deleting}
                 className="border border-red-700 rounded-full px-4 py-1 text-sm text-red-700 hover:bg-red-700 hover:text-white transition-colors disabled:opacity-40"
               >
-                Delete All ({messages.length})
+                {deleting ? 'Deleting...' : `Delete All (${messages.length})`}
               </button>
             </div>
             <span className="text-sm text-gray-500">
@@ -135,7 +203,15 @@ export default function AdminPage() {
           </div>
 
           {messages.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No messages yet</p>
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">No messages yet</p>
+              <Link
+                href="/compose?mode=text"
+                className="inline-block border border-black rounded-full px-6 py-2 text-black hover:bg-black hover:text-white transition-colors"
+              >
+                Write first message
+              </Link>
+            </div>
           ) : (
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
               {messages.map((msg) => (
