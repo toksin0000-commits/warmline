@@ -9,29 +9,6 @@ interface VoiceRecorderProps {
 
 export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [supportedMimeType, setSupportedMimeType] = useState<string>('audio/webm');
-
-  useEffect(() => {
-    const getSupportedMimeType = (): string => {
-      const types = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4;codecs=mp4a.40.2',
-        'audio/mp4',
-        'audio/wav',  // fallback
-      ];
-      
-      for (const type of types) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          console.log('🎤 Supported mime type:', type);
-          return type;
-        }
-      }
-      return 'audio/webm';
-    };
-
-    setSupportedMimeType(getSupportedMimeType());
-  }, []);
 
   const {
     status,
@@ -41,25 +18,34 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      sampleRate: 48000,
-      channelCount: 1,
+      // VYPNUTO vše co mohlo kazit zvuk
+      echoCancellation: false,  // VYPNUTO - může způsobovat "plechový" zvuk
+      noiseSuppression: false,   // VYPNUTO - může ořezávat výšky
+      autoGainControl: false,    // VYPNUTO - může dělat "zahuhlaný" zvuk
+      
+      // Základní nastavení
+      sampleRate: 44100,         // Klasická CD kvalita
+      channelCount: 1,           // Mono je pro hlas nejlepší
+      
+      // Důležité pro kvalitu
+      latency: 0,                // Minimální zpoždění
     } as MediaTrackConstraints,
+    
+    // Použijeme nejjednodušší možný formát
     blobPropertyBag: {
-      type: 'audio/webm;codecs=opus', // Vynutíme Opus
+      type: 'audio/webm',        // Základní WebM
     },
+    
     mediaRecorderOptions: {
-      mimeType: 'audio/webm;codecs=opus',
-      audioBitsPerSecond: 160000, // 160 kbps - skvělý kompromis
+      mimeType: 'audio/webm',
+      audioBitsPerSecond: 192000, // 192 kbps - dostatečná kvalita
     },
+    
     onStop: (blobUrl: string, blob: Blob) => {
-      console.log('🎵 Audio blob:', {
+      console.log('🎵 RAW Audio:', {
         size: blob.size,
         type: blob.type,
-        bitrate: Math.round(blob.size * 8 / 5 / 1000) + ' kbps',
-        sizeKB: Math.round(blob.size / 1024) + ' KB'
+        duration: '5s'
       });
       setAudioBlob(blob);
       onRecordingComplete(blob);
@@ -83,7 +69,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   return (
     <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
       <div className="text-xs text-gray-400 mb-2">
-        🎵 High Quality Audio (160 kbps Opus) ~100 KB
+        🎵 RAW Audio (žádné úpravy)
       </div>
 
       {status === 'recording' ? (
