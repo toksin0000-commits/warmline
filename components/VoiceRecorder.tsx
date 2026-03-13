@@ -9,17 +9,45 @@ interface VoiceRecorderProps {
 
 export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [micReady, setMicReady] = useState(false);
+  const [micInfo, setMicInfo] = useState<{
+    label: string;
+    maxSampleRate: number;
+    supported: boolean;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        const track = stream.getAudioTracks()[0];
-        console.log('🎤 Mikrofon:', track.label);
-        stream.getTracks().forEach(track => track.stop());
-        setMicReady(true);
-      })
-      .catch(err => console.error('Mikrofon error:', err));
+    // Zjistíme, co mikrofon umí
+    navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        sampleRate: 120000, // Požádáme o maximum
+        channelCount: 2,
+        sampleSize: 24,
+      } 
+    })
+    .then(stream => {
+      const track = stream.getAudioTracks()[0];
+      const settings = track.getSettings();
+      
+      setMicInfo({
+        label: track.label,
+        maxSampleRate: settings.sampleRate || 48000,
+        supported: true
+      });
+      
+      console.log('🎤 Mikrofon:', {
+        model: track.label,
+        sampleRate: settings.sampleRate,
+        channels: settings.channelCount,
+        sampleSize: settings.sampleSize
+      });
+      
+      stream.getTracks().forEach(track => track.stop());
+    })
+    .catch(err => {
+      console.error('Mikrofon error:', err);
+      setError('Mikrofon není k dispozici');
+    });
   }, []);
 
   const {
@@ -30,33 +58,31 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      // VYSOKÝ VZORKOVACÍ KMITOČET pro výšky
-      sampleRate: 96000,           // 96 kHz - zachytí všechny výšky
-      channelCount: 2,              // Stereo pro prostor
+      // Požádáme o maximum, prohlížeč dá co může
+      sampleRate: 120000,
+      sampleSize: 24,
+      channelCount: 2,
       
-      echoCancellation: true,
+      echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
     } as MediaTrackConstraints,
     
-    // Použijeme OPUS, který umí dobře komprimovat i vysoké frekvence
     blobPropertyBag: {
-      type: 'audio/webm;codecs=opus',
-    },
-    
-    mediaRecorderOptions: {
-      mimeType: 'audio/webm;codecs=opus',
-      audioBitsPerSecond: 256000,    // 256 kbps - kompromis
+      type: 'audio/wav', // Nekomprimovaný WAV
     },
     
     onStop: (blobUrl: string, blob: Blob) => {
       const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      console.log('🎵 96 kHz komprimováno:', {
-        size: sizeMB + ' MB',
-        bitrate: '256 kbps',
-        sampleRate: '96 kHz',
-        kvalita: 'Vysoké výšky zachovány'
+      const sampleRate = micInfo?.maxSampleRate || 48000;
+      
+      console.log('🎵 Ultra kvalita:', {
+        velikost: sizeMB + ' MB',
+        sampleRate: sampleRate + ' Hz',
+        limit: '4.5 MB',
+        vlimitu: parseFloat(sizeMB) < 4.5 ? '✅ Ano' : '❌ Ne'
       });
+      
       setAudioBlob(blob);
       onRecordingComplete(blob);
     }
@@ -68,7 +94,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   };
 
   const handleStartRecording = () => {
-    if (!micReady) {
+    if (!micInfo?.supported) {
       alert('Mikrofon není připraven');
       return;
     }
@@ -80,12 +106,29 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     }, 5000);
   };
 
+  if (error) {
+    return (
+      <div className="border border-red-300 rounded-xl p-8 w-full max-w-md text-center">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
-      <div className="text-xs text-gray-400 mb-2 flex justify-center gap-3">
-        <span>96 kHz Stereo</span>
-        <span>256 kbps</span>
-        <span>~1.5 MB</span>
+      <div className="text-xs text-gray-400 mb-2 space-y-1">
+        <div className="flex justify-center gap-3">
+          <span className={micInfo ? 'text-green-600' : 'text-yellow-600'}>
+            {micInfo ? '🎤 ' + micInfo.label : '⏳ Kontrola mikrofonu...'}
+          </span>
+        </div>
+        {micInfo && (
+          <div className="flex justify-center gap-3 text-gray-500">
+            <span>{micInfo.maxSampleRate} Hz</span>
+            <span>24-bit</span>
+            <span>Stereo</span>
+          </div>
+        )}
       </div>
 
       {status === 'recording' ? (
@@ -116,7 +159,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
       ) : (
         <button
           onClick={handleStartRecording}
-          disabled={!micReady}
+          disabled={!micInfo}
           className="border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
         >
           Nahrát zprávu
