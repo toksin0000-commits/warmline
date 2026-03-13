@@ -1,6 +1,7 @@
-export type Message = {
+export interface Message {
   id: string;
   type: 'text' | 'voice';
   content?: string;
-  voice_url?: string;
-};
+  voiceUrl?: string;
+  created: number;
+}
