@@ -2,23 +2,22 @@
 
 import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRandomColor } from '@/hooks/useRandomColor';
 
-// Definice props pro VoiceRecorder
 interface VoiceRecorderProps {
   onRecordingComplete: (blob: Blob) => void;
 }
 
-// Dynamický import s typem a loading fallback
 const VoiceRecorder = dynamic<VoiceRecorderProps>(
   () => import('@/components/VoiceRecorder'),
   { 
     ssr: false,
     loading: () => (
-      <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
-        <p className="text-black">Loading recorder...</p>
+      <div className="border rounded-xl p-8 w-full max-w-md text-center">
+        <p>Loading recorder...</p>
       </div>
     )
   }
@@ -28,7 +27,7 @@ export default function ComposePage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center h-screen">
-        <p className="text-black">Loading...</p>
+        <p>Loading...</p>
       </div>
     }>
       <InnerComposePage />
@@ -40,11 +39,19 @@ function InnerComposePage() {
   const params = useSearchParams();
   const mode = params.get('mode') as 'text' | 'voice' | null;
   const router = useRouter();
+  const colors = useRandomColor();
 
   const [text, setText] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [showEnvelope, setShowEnvelope] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.style.backgroundColor = colors.bg;
+      document.body.style.color = colors.text;
+    }
+  }, [colors]);
 
   const send = async (): Promise<void> => {
     setSending(true);
@@ -103,10 +110,8 @@ function InnerComposePage() {
         throw new Error('No message to send');
       }
 
-      // ✅ Spustíme animaci odlétající obálky
       setShowEnvelope(true);
       
-      // ✅ Po 2 sekundách přesměrujeme na homepage
       setTimeout(() => {
         router.push('/');
       }, 2000);
@@ -119,15 +124,11 @@ function InnerComposePage() {
   };
 
   const handleRecordingComplete = (blob: Blob): void => {
-    console.log('Recording complete:', {
-      size: blob.size,
-      type: blob.type
-    });
     setAudioBlob(blob);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 py-12 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-12 relative overflow-hidden" style={{ backgroundColor: colors.bg }}>
       {/* Animace odlétající obálky */}
       <AnimatePresence>
         {showEnvelope && (
@@ -148,17 +149,15 @@ function InnerComposePage() {
             style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
           >
             <div className="relative w-32 h-24">
-              {/* Obálka */}
-              <div className="absolute inset-0 bg-white border-2 border-black rounded-lg shadow-xl">
-                {/* Chlopeň */}
-                <div className="absolute top-0 left-0 right-0 h-1/2 border-b border-black bg-white origin-top transform rotate-0" />
+              <div className="absolute inset-0 bg-white border-2 rounded-lg shadow-xl" style={{ borderColor: colors.accent }}>
+                <div className="absolute top-0 left-0 right-0 h-1/2 border-b bg-white origin-top" style={{ borderColor: colors.accent }} />
               </div>
-              {/* Text "Thank you" nebo něco podobného */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-black whitespace-nowrap"
+                className="absolute -top-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap"
+                style={{ color: colors.accent }}
               >
                 {mode === 'text' ? '✉️ Your message is on its way!' : '🎤 Your voice is flying away!'}
               </motion.div>
@@ -167,25 +166,29 @@ function InnerComposePage() {
         )}
       </AnimatePresence>
 
-      {/* Původní obsah (zůstává, ale může být ztlumený během animace) */}
-      <div className={`transition-opacity duration-300 ${showEnvelope ? 'opacity-30' : 'opacity-100'}`}>
-        <p className="text-black mb-8 text-center max-w-md">
+      <div className={`transition-opacity duration-300 ${showEnvelope ? 'opacity-30' : 'opacity-100'} w-full max-w-md`}>
+        <p className="mb-8 text-center max-w-md mx-auto" style={{ color: colors.text, opacity: 0.7 }}>
           {mode === 'text'
             ? 'Write something you would love to receive yourself.'
             : 'Say something that could brighten someone’s day.'}
         </p>
 
         {mode === 'text' && (
-          <div className="w-full max-w-md">
+          <div className="w-full">
             <textarea
-              className="border border-black rounded-xl p-4 w-full h-40 text-black focus:outline-none focus:ring-2 focus:ring-black/20 transition-all"
+              className="border rounded-xl p-4 w-full h-40 focus:outline-none focus:ring-2 transition-all"
+              style={{ 
+                borderColor: colors.accent,
+                color: colors.text,
+                backgroundColor: 'transparent'
+              }}
               maxLength={120}
               placeholder="Write a short sentence…"
               value={text}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
               disabled={sending || showEnvelope}
             />
-            <p className="text-right text-sm text-gray-500 mt-1">
+            <p className="text-right text-sm mt-1" style={{ color: colors.text, opacity: 0.5 }}>
               {text.length}/120
             </p>
           </div>
@@ -205,7 +208,22 @@ function InnerComposePage() {
             (mode === 'text' && !text.trim()) || 
             (mode === 'voice' && !audioBlob)
           }
-          className="mt-8 border border-black rounded-full px-8 py-3 text-black disabled:opacity-40 hover:bg-black hover:text-white transition-colors disabled:hover:bg-transparent disabled:hover:text-black"
+          className="mt-8 border rounded-full px-8 py-3 w-full transition-colors disabled:opacity-40"
+          style={{ 
+            borderColor: colors.accent,
+            color: colors.text,
+            backgroundColor: 'transparent'
+          }}
+          onMouseEnter={(e) => {
+            if (!sending && !showEnvelope) {
+              e.currentTarget.style.backgroundColor = colors.accent;
+              e.currentTarget.style.color = colors.bg;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = colors.text;
+          }}
         >
           {sending ? 'Sending…' : showEnvelope ? 'Sent! ✨' : 'Send'}
         </button>
@@ -213,7 +231,10 @@ function InnerComposePage() {
         <button
           onClick={() => router.push('/')}
           disabled={sending || showEnvelope}
-          className="mt-4 text-sm text-gray-500 hover:text-black transition-colors disabled:opacity-40"
+          className="mt-4 text-sm w-full transition-colors disabled:opacity-40"
+          style={{ color: colors.text, opacity: 0.5 }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
         >
           ← Back
         </button>

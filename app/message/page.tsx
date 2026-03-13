@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRandomColor } from '@/hooks/useRandomColor';
 
 interface Message {
   type: 'text' | 'voice';
@@ -14,9 +15,17 @@ export default function MessagePage() {
   const [message, setMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const colors = useRandomColor();
 
   useEffect(() => {
-    // ✅ ZMĚNA: /api/message → /api/messages/random
+    // Aplikujeme barvy na document
+    if (typeof document !== 'undefined') {
+      document.body.style.backgroundColor = colors.bg;
+      document.body.style.color = colors.text;
+    }
+  }, [colors]);
+
+  useEffect(() => {
     fetch('/api/messages/random')
       .then(async r => {
         if (!r.ok) {
@@ -35,33 +44,46 @@ export default function MessagePage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-white">
-        {/* Skeleton loading */}
-        <div className="border border-black rounded-xl p-8 w-full max-w-md bg-white shadow-sm animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-          <div className="h-20 bg-gray-200 rounded"></div>
+      <div className="flex flex-col items-center justify-center h-screen" style={{ backgroundColor: colors.bg }}>
+        <div className="border rounded-xl p-8 w-full max-w-md shadow-sm animate-pulse" style={{ borderColor: colors.accent, backgroundColor: colors.bg }}>
+          <div className="h-4 rounded w-3/4 mb-4" style={{ backgroundColor: colors.accent, opacity: 0.2 }}></div>
+          <div className="h-20 rounded" style={{ backgroundColor: colors.accent, opacity: 0.1 }}></div>
         </div>
-        <p className="text-black mt-4">Opening your message…</p>
+        <p className="mt-4" style={{ color: colors.text }}>Opening your message…</p>
       </div>
     );
   }
 
   if (error || !message) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6">
-        <div className="border border-black rounded-xl p-12 w-full max-w-md text-center">
-          <div className="text-6xl mb-4">📭</div>
-          <h2 className="text-2xl font-light text-black mb-2">
+      <div className="flex flex-col items-center justify-center min-h-screen px-6" style={{ backgroundColor: colors.bg }}>
+        <div className="border rounded-xl p-12 w-full max-w-md text-center" style={{ borderColor: colors.accent }}>
+          <div className="text-6xl mb-4" style={{ color: colors.accent }}>📭</div>
+          <h2 className="text-2xl font-light mb-2" style={{ color: colors.text }}>
             {error ? 'Something went wrong' : 'No messages yet'}
           </h2>
-          <p className="text-gray-600 mb-8">
+          <p className="mb-8" style={{ color: colors.text, opacity: 0.6 }}>
             {error 
               ? 'Please try again later.' 
               : 'Be the first to send someone a kind word!'}
           </p>
           <Link
             href="/compose?mode=text"
-            className="inline-block border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors"
+            className="inline-block rounded-full px-8 py-3 transition-colors"
+            style={{ 
+              borderColor: colors.accent, 
+              borderWidth: '1px',
+              color: colors.text,
+              backgroundColor: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.accent;
+              e.currentTarget.style.color = colors.bg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = colors.text;
+            }}
           >
             Write a message
           </Link>
@@ -70,7 +92,6 @@ export default function MessagePage() {
     );
   }
 
-  // Formátování času
   const formattedDate = new Date(message.created).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -79,17 +100,16 @@ export default function MessagePage() {
   });
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 py-12">
-      {/* Message Card */}
-      <div className="border border-black rounded-xl p-8 w-full max-w-md bg-white shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-center mb-4 text-sm text-gray-600">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-12" style={{ backgroundColor: colors.bg }}>
+      <div className="border rounded-xl p-8 w-full max-w-md shadow-sm hover:shadow-md transition-shadow" style={{ borderColor: colors.accent }}>
+        <div className="flex justify-between items-center mb-4 text-sm" style={{ color: colors.text, opacity: 0.6 }}>
           <span>💌 Someone sent you this today</span>
           {message.created && <span>{formattedDate}</span>}
         </div>
 
         {message.type === 'text' && message.content && (
           <div className="min-h-[100px]">
-            <p className="text-lg leading-relaxed text-black whitespace-pre-wrap">
+            <p className="text-lg leading-relaxed whitespace-pre-wrap" style={{ color: colors.text }}>
               {message.content}
             </p>
           </div>
@@ -100,6 +120,10 @@ export default function MessagePage() {
             <audio 
               controls 
               className="w-full"
+              style={{ 
+                borderRadius: '8px',
+                border: `1px solid ${colors.accent}`
+              }}
               onError={(e) => {
                 console.error('Audio playback error:', e);
                 setError('Failed to load audio');
@@ -109,37 +133,61 @@ export default function MessagePage() {
               <source src={message.voiceUrl} type="audio/mp4" />
               Your browser does not support the audio element.
             </audio>
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-center" style={{ color: colors.text, opacity: 0.5 }}>
               Voice message · ~5 seconds
             </p>
           </div>
         )}
       </div>
 
-      {/* Call to action */}
       <div className="mt-12 text-center w-full max-w-md">
-        <p className="text-black mb-6 text-lg">
+        <p className="mb-6 text-lg" style={{ color: colors.text }}>
           Now it&apos;s your turn to brighten someone&apos;s day ✨
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/compose?mode=text"
-            className="border border-black rounded-full px-6 py-3 text-black hover:bg-black hover:text-white transition-colors text-center"
+            className="rounded-full px-6 py-3 transition-colors text-center"
+            style={{ 
+              borderColor: colors.accent, 
+              borderWidth: '1px',
+              color: colors.text
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.accent;
+              e.currentTarget.style.color = colors.bg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = colors.text;
+            }}
           >
             Write a sentence
           </Link>
 
           <Link
             href="/compose?mode=voice"
-            className="border border-black rounded-full px-6 py-3 text-black hover:bg-black hover:text-white transition-colors text-center"
+            className="rounded-full px-6 py-3 transition-colors text-center"
+            style={{ 
+              borderColor: colors.accent, 
+              borderWidth: '1px',
+              color: colors.text
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = colors.accent;
+              e.currentTarget.style.color = colors.bg;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = colors.text;
+            }}
           >
             Record voice message
           </Link>
         </div>
 
-        {/* Decorative element */}
-        <p className="text-xs text-gray-400 mt-8">
+        <p className="text-xs mt-8" style={{ color: colors.text, opacity: 0.4 }}>
           Messages disappear after 7 days · Share the love
         </p>
       </div>
