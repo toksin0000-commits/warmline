@@ -1,48 +1,66 @@
 import { redis } from '@/lib/redis';
-
-interface VoiceMessage {
-  type: 'voice';
-  voiceUrl: string;
-}
-
-interface TextMessage {
-  type: 'text';
-  content: string;
-}
-
-type MessageData = VoiceMessage | TextMessage;
+import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
-  const body = await req.json() as MessageData;
-  
-  // Validace
-  if (!['text', 'voice'].includes(body.type)) {
-    return new Response('Invalid type', { status: 400 });
-  }
-
-  const id = crypto.randomUUID();
-  
-  const message: Record<string, string | number> = {
-    type: body.type,
-    created: Date.now()
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  if (body.type === 'text') {
-    if (!body.content || body.content.length > 120) {
-      return new Response('Invalid content', { status: 400 });
-    }
-    message.content = body.content;
-  } else {
-    if (!body.voiceUrl) {
-      return new Response('Voice URL required', { status: 400 });
-    }
-    message.voiceUrl = body.voiceUrl;
+  if (req.method === 'OPTIONS') {
+    return NextResponse.json({}, { headers });
   }
 
-  await redis.hset(`msg:${id}`, message);
-  
-  // Nastavit expiraci po 7 dnech
-  await redis.expire(`msg:${id}`, 7 * 24 * 60 * 60);
+  try {
+    const body = await req.json();
+    
+    if (!body || !body.type) {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400, headers }
+      );
+    }
 
-  return new Response('OK');
+    const id = crypto.randomUUID();
+    
+    const message: any = {
+      type: body.type,
+      created: Date.now()
+    };
+
+    if (body.type === 'text') {
+      if (!body.content || body.content.length > 120) {
+        return NextResponse.json(
+          { error: 'Invalid content' },
+          { status: 400, headers }
+        );
+      }
+      message.content = body.content;
+    } else if (body.type === 'voice') {
+      if (!body.voiceUrl) {
+        return NextResponse.json(
+          { error: 'Voice URL required' },
+          { status: 400, headers }
+        );
+      }
+      message.voiceUrl = body.voiceUrl;
+    } else {
+      return NextResponse.json(
+        { error: 'Invalid type' },
+        { status: 400, headers }
+      );
+    }
+
+    await redis.hset(`msg:${id}`, message);
+    await redis.expire(`msg:${id}`, 7 * 24 * 60 * 60);
+
+    return NextResponse.json({ success: true }, { headers });
+  } catch (error) {
+    console.error('Send error:', error);
+    return NextResponse.json(
+      { error: 'Failed to send message' },
+      { status: 500, headers }
+    );
+  }
 }

@@ -2,28 +2,50 @@ import { put } from '@vercel/blob';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const formData = await request.formData();
-  const file = formData.get('audio') as File;
-  
-  if (!file) {
-    return NextResponse.json(
-      { error: 'No file uploaded' },
-      { status: 400 }
-    );
+  // CORS headers pro mobile
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  // Handle preflight OPTIONS request
+  if (request.method === 'OPTIONS') {
+    return NextResponse.json({}, { headers });
   }
 
-  // Kontrola velikosti (max 5 sekund ~ 500kB)
-  if (file.size > 500 * 1024) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('audio') as File;
+    
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file uploaded' },
+        { status: 400, headers }
+      );
+    }
+
+    // Kontrola velikosti (max 5MB pro WAV)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 5MB.' },
+        { status: 400, headers }
+      );
+    }
+
+    // Nahrání na Vercel Blob
+    const blob = await put(`voice/${Date.now()}-${file.name}`, file, {
+      access: 'public',
+      addRandomSuffix: true,
+    });
+
+    return NextResponse.json({ url: blob.url }, { headers });
+    
+  } catch (error) {
+    console.error('Upload error:', error);
     return NextResponse.json(
-      { error: 'File too large' },
-      { status: 400 }
+      { error: 'Failed to upload file' },
+      { status: 500, headers }
     );
   }
-
-  // Nahrání na Vercel Blob (nebo jiné úložiště)
-  const blob = await put(`voice/${Date.now()}-${file.name}`, file, {
-    access: 'public',
-  });
-
-  return NextResponse.json({ url: blob.url });
 }
