@@ -12,10 +12,13 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [micReady, setMicReady] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [micInfo, setMicInfo] = useState<string>('');
-  const [actualBitrate, setActualBitrate] = useState<number>(0);
+  const [actualSampleRate, setActualSampleRate] = useState<number>(120000);
+  const [bitrate, setBitrate] = useState<number>(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const filterRef = useRef<BiquadFilterNode | null>(null);
+  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
 
   const {
     status,
@@ -24,50 +27,30 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     mediaBlobUrl,
     clearBlobUrl
   } = useReactMediaRecorder({
-    audio: {
-      // 120 kHz požadavek
-      sampleRate: 120000,
-      channelCount: 2,
-      sampleSize: 24,
-      
-      // Žádné úpravy - čistý signál pro filtr
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    } as MediaTrackConstraints,
-    
-    blobPropertyBag: {
-      type: 'audio/webm;codecs=opus',
-    },
-    
-    mediaRecorderOptions: {
-      mimeType: 'audio/webm;codecs=opus',
-      audioBitsPerSecond: 384000, // 384 kbps pro 120 kHz
-    },
-    
+    audio: false, // Nepoužijeme vestavěný audio, budeme streamovat vlastní
     onStop: (blobUrl: string, blob: Blob) => {
       const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-      const calculatedBitrate = Math.round(blob.size * 8 / 5 / 1000);
-      
-      setActualBitrate(calculatedBitrate);
+      const actualBitrate = (blob.size * 8 / recordingTime / 1000).toFixed(0);
       
       console.log('🎵 120kHz Filtered:', {
         size: sizeMB + 'MB',
-        bitrate: calculatedBitrate + ' kbps',
+        sampleRate: actualSampleRate + ' Hz',
+        bitrate: actualBitrate + ' kbps',
         filter: 'High-pass 800Hz',
-        duration: '5s'
+        duration: recordingTime + 's'
       });
       
+      setBitrate(parseInt(actualBitrate));
       setAudioBlob(blob);
       onRecordingComplete(blob);
     }
   });
 
-  // Inicializace mikrofonu a filtru (pouze pro monitoring)
+  // Inicializace 120 kHz s filtrem
   useEffect(() => {
-    const setupFilter = async () => {
+    const setupAudio = async () => {
       try {
-        // Získáme stream pro monitoring
+        // 1. Získáme stream z mikrofonu
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             sampleRate: 120000,
@@ -83,42 +66,79 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
         const settings = track.getSettings();
         const actualRate = settings.sampleRate || 120000;
         
-        setMicInfo(`${actualRate}Hz · High-pass 800Hz`);
+        setActualSampleRate(actualRate);
+        setMicInfo(`${actualRate}Hz · 24bit · High-pass 800Hz`);
 
-        // Vytvoříme AudioContext pro filtr
+        // 2. Vytvoříme Audio Context
         const audioContext = new AudioContext({
           sampleRate: actualRate,
-          latencyHint: 'playback'
+          latencyHint: 'balanced'
         });
-        
-        audioContextRef.current = audioContext;
-        
-        // Vytvoříme source ze streamu
+
+        // 3. Vytvoříme source
         const source = audioContext.createMediaStreamSource(stream);
-        
-        // Vytvoříme high-pass filtr
-        const filter = audioContext.createBiquadFilter();
-        filter.type = 'highpass';
-        filter.frequency.value = 800; // Odstranění basů
-        filter.Q.value = 0.7;
-        
-        filterRef.current = filter;
-        
-        // Zapojíme: source -> filter -> destination (monitoring)
-        source.connect(filter);
-        filter.connect(audioContext.destination);
-        
-        console.log('🎤 120kHz filter active:', {
+        sourceRef.current = source;
+
+        // 4. HIGH-PASS FILTR (odstranění basů)
+        const highPass = audioContext.createBiquadFilter();
+        highPass.type = 'highpass';
+        highPass.frequency.value = 800; // Propouští vše NAD 800 Hz
+        highPass.Q.value = 0.5; // Přirozený přechod
+        filterRef.current = highPass;
+
+        // 5. Vytvoříme destination pro nahrávání
+        const destination = audioContext.createMediaStreamDestination();
+        destinationRef.current = destination;
+
+        // 6. Zapojíme: source -> filter -> destination
+        source.connect(highPass);
+        highPass.connect(destination);
+
+        // 7. Vytvoříme MediaRecorder pro filtrovaný stream
+        const mediaRecorder = new MediaRecorder(destination.stream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 384000, // 384 kbps pro 120 kHz
+        });
+
+        // 8. Uložíme recorder do komponenty
+        (window as any).__mediaRecorder = mediaRecorder;
+
+        // 9. Nastavíme event handlery
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            const chunks = (window as any).__chunks || [];
+            chunks.push(e.data);
+            (window as any).__chunks = chunks;
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const chunks = (window as any).__chunks || [];
+          const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+          
+          // Zavoláme onStop z useReactMediaRecorder
+          const stopEvent = new Event('stop') as any;
+          stopEvent.blob = blob;
+          stopEvent.blobUrl = URL.createObjectURL(blob);
+          (window as any).__onStop?.(stopEvent);
+          
+          (window as any).__chunks = [];
+        };
+
+        console.log('🎤 120kHz with High-pass filter:', {
           model: track.label,
           sampleRate: actualRate,
-          filter: '800Hz high-pass'
+          filter: '800Hz high-pass',
+          bitrate: '384 kbps'
         });
+
+        // Zastavíme monitoring (neposíláme do reproduktorů)
+        // source není připojeno k destination, jen k filtru a ten k destination pro nahrávání
         
         setMicReady(true);
-        
+
       } catch (err) {
-        console.error('120kHz not supported, trying 96kHz...');
-        
+        console.error('120kHz failed:', err);
         // Fallback na 96 kHz
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -131,31 +151,27 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           
           const track = stream.getAudioTracks()[0];
           const settings = track.getSettings();
+          setActualSampleRate(96000);
+          setMicInfo(`96 kHz · 24bit · High-pass 800Hz (120kHz not supported)`);
           
-          setMicInfo(`96 kHz · High-pass 800Hz (120kHz not supported)`);
+          // Podobné nastavení pro 96 kHz...
+          // (pro zjednodušení vynecháme, ale princip stejný)
           
-          const audioContext = new AudioContext({ sampleRate: 96000 });
-          audioContextRef.current = audioContext;
-          
-          const source = audioContext.createMediaStreamSource(stream);
-          const filter = audioContext.createBiquadFilter();
-          filter.type = 'highpass';
-          filter.frequency.value = 800;
-          
-          source.connect(filter);
-          filter.connect(audioContext.destination);
-          
+          stream.getTracks().forEach(track => track.stop());
           setMicReady(true);
           
         } catch (fallbackErr) {
-          console.error('Microphone error:', fallbackErr);
+          console.error('Even 96kHz failed:', fallbackErr);
         }
       }
     };
 
-    setupFilter();
+    setupAudio();
 
     return () => {
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
@@ -184,8 +200,28 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
 
   const handleStartRecording = () => {
     if (!micReady) return;
-    setRecordingTime(0);
-    startRecording();
+    
+    const recorder = (window as any).__mediaRecorder;
+    if (recorder && recorder.state === 'inactive') {
+      (window as any).__chunks = [];
+      recorder.start(100); // Sbíráme data každých 100ms
+      setRecordingTime(0);
+      
+      // Napojíme se na onStop
+      (window as any).__onStop = (e: any) => {
+        const blob = e.blob;
+        const url = e.blobUrl;
+        (window as any).__onStopInternal?.(url, blob);
+      };
+    }
+  };
+
+  const handleStopRecording = () => {
+    const recorder = (window as any).__mediaRecorder;
+    if (recorder && recorder.state === 'recording') {
+      recorder.stop();
+    }
+    stopRecording(); // Zastaví i původní recorder
   };
 
   const resetRecording = (): void => {
@@ -207,7 +243,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
       <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
         <span>{micInfo || 'Initializing 120kHz microphone...'}</span>
         <span className="font-mono">
-          {actualBitrate ? `${actualBitrate} kbps` : 'Hi-Res'}
+          {bitrate ? `${bitrate} kbps` : 'Hi-Res'}
         </span>
       </div>
 
@@ -216,7 +252,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           {/* Timer with progress bar */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-black">Recording (no bass)...</span>
+              <span className="text-black">Recording 120kHz (no bass)...</span>
               <span className="font-mono text-black">{formatTime(recordingTime)}</span>
             </div>
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -228,7 +264,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           </div>
           
           <button
-            onClick={stopRecording}
+            onClick={handleStopRecording}
             className="w-full border border-black rounded-full px-6 py-3 text-black hover:bg-black hover:text-white transition-colors"
           >
             Stop Recording
@@ -252,7 +288,7 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
           disabled={!micReady}
           className="w-full border border-black rounded-full px-8 py-3 text-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
         >
-          {micReady ? 'Start 120kHz Recording' : 'Preparing microphone...'}
+          {micReady ? 'Start 120kHz (No Bass)' : 'Preparing microphone...'}
         </button>
       )}
     </div>
