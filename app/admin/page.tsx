@@ -10,17 +10,24 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
     fetchMessages();
-  }, []);
+    
+    // Auto-refresh každých 5 sekund
+    let interval: NodeJS.Timeout;
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        fetchMessages();
+      }, 5000);
+    }
+    
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
 
   const fetchMessages = async () => {
-    setLoading(true);
-    setError(null);
-    
     try {
-      console.log('Fetching messages...');
       const res = await fetch('/api/messages', {
         cache: 'no-store',
         headers: {
@@ -28,28 +35,14 @@ export default function AdminPage() {
         }
       });
       
-      console.log('Response status:', res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
-      }
+      if (!res.ok) throw new Error('Failed to fetch');
       
       const data = await res.json();
-      console.log('Received data:', data);
-      
-      if (Array.isArray(data)) {
-        setMessages(data);
-        console.log(`Loaded ${data.length} messages`);
-      } else {
-        console.error('Data is not an array:', data);
-        setError('Invalid data format received');
-        setMessages([]);
-      }
+      setMessages(data);
+      setError(null);
     } catch (error) {
       console.error('Failed to fetch messages:', error);
-      setError(error instanceof Error ? error.message : 'Unknown error');
-      setMessages([]);
+      setError('Failed to load messages');
     } finally {
       setLoading(false);
     }
@@ -116,32 +109,10 @@ export default function AdminPage() {
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit'
     });
   };
-
-  // Debug info
-  if (error) {
-    return (
-      <div className="min-h-screen bg-white p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
-            <h2 className="text-red-700 font-medium mb-2">Error Loading Messages</h2>
-            <p className="text-red-600 mb-4">{error}</p>
-            <button
-              onClick={fetchMessages}
-              className="border border-red-500 rounded-full px-4 py-2 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-          <Link href="/" className="text-sm text-gray-500 hover:text-black">
-            ← Back to home
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -159,11 +130,20 @@ export default function AdminPage() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-light text-black">Admin Panel</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="rounded"
+              />
+              Auto-refresh (5s)
+            </label>
             <button
               onClick={fetchMessages}
               className="text-sm text-gray-500 hover:text-black transition-colors"
-              title="Refresh"
+              title="Refresh now"
             >
               🔄 Refresh
             </button>
@@ -172,6 +152,12 @@ export default function AdminPage() {
             </Link>
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
 
         <div className="bg-white border border-black rounded-xl p-6 mb-6">
           <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
@@ -199,6 +185,7 @@ export default function AdminPage() {
             </div>
             <span className="text-sm text-gray-500">
               Total: {messages.length} messages
+              {autoRefresh && <span className="ml-2 text-xs">(auto-refresh)</span>}
             </span>
           </div>
 
