@@ -11,7 +11,6 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [supportedMimeType, setSupportedMimeType] = useState<string>('audio/webm');
 
-  // Detekce podporovaného kodeku
   useEffect(() => {
     const getSupportedMimeType = (): string => {
       const types = [
@@ -20,8 +19,6 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
         'audio/mp4;codecs=mp4a.40.2',
         'audio/mp4',
         'audio/wav',
-        'audio/ogg;codecs=opus',
-        'audio/ogg',
       ];
       
       for (const type of types) {
@@ -44,30 +41,25 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     clearBlobUrl
   } = useReactMediaRecorder({
     audio: {
-      // Základní nastavení kvality
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
       sampleRate: 48000,
-      channelCount: 1, // Mono je lepší pro hlas (místo stereo)
-      
-      // Potlačení dutého/plechového zvuku
-      echoCancellation: true,     // ✅ ZAPNUTO - eliminuje ozvěnu
-      noiseSuppression: true,      // ✅ ZAPNUTO - potlačuje šum pozadí
-      autoGainControl: true,       // ✅ ZAPNUTO - vyrovnává hlasitost
-      
-      // Další vylepšení
-      latency: 0,                   // Minimální latence
-      volume: 1.0,                  // Maximální hlasitost
+      channelCount: 1,
+      // 👇 ODSTANĚNO: volume (nepodporováno)
     } as MediaTrackConstraints,
     blobPropertyBag: {
       type: supportedMimeType,
     },
     mediaRecorderOptions: {
       mimeType: supportedMimeType,
-      audioBitsPerSecond: 128000,   // Kvalita záznamu
+      audioBitsPerSecond: 256000, // 👈 ZVÝŠENO na 256 kbps (z 128)
     },
     onStop: (blobUrl: string, blob: Blob) => {
       console.log('🎵 Audio blob:', {
         size: blob.size,
         type: blob.type,
+        bitrate: Math.round(blob.size * 8 / 5 / 1000), // kbps
         settings: 'echo cancellation ON'
       });
       setAudioBlob(blob);
@@ -91,10 +83,8 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
 
   return (
     <div className="border border-black rounded-xl p-8 w-full max-w-md text-center">
-      {/* Indikátor kvality */}
-      <div className="text-xs text-gray-400 mb-2 flex justify-center gap-2">
-        <span>{supportedMimeType.includes('opus') ? '🎵 HQ' : '🎵 Standard'}</span>
-        <span>🔊 Echo cancel</span>
+      <div className="text-xs text-gray-400 mb-2">
+        {supportedMimeType.includes('opus') ? '🎵 HQ Audio (256 kbps)' : '🎵 Standard'}
       </div>
 
       {status === 'recording' ? (
