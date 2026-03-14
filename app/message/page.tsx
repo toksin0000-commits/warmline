@@ -140,12 +140,22 @@ export default function MessagePage() {
         </div>
 
         {message.type === 'text' && message.content && (
-          <div className="min-h-[100px]">
-            <p className="text-lg leading-relaxed whitespace-pre-wrap" style={{ color: colors.text }}>
-              {message.content}
-            </p>
-          </div>
-        )}
+  <div className="min-h-[150px] flex items-center justify-center p-6 rounded-lg" 
+       style={{ 
+         backgroundColor: `${colors.accent}08`,
+         border: `1px solid ${colors.accent}20`
+       }}>
+    <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
+       style={{ 
+         color: colors.text,
+         fontFamily: "'Palatino', 'Georgia', serif",
+         letterSpacing: '0.02em',
+         lineHeight: '1.7'
+       }}>
+      "{message.content}"
+    </p>
+  </div>
+)}
 
         {message.type === 'voice' && message.voiceUrl && (
           <div className="space-y-3">
