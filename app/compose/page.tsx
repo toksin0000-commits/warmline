@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRandomColor } from '@/hooks/useRandomColor';
+import useSound from 'use-sound';
 
 interface VoiceRecorderProps {
   onRecordingComplete: (blob: Blob) => void;
@@ -46,6 +47,11 @@ function InnerComposePage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [showEnvelope, setShowEnvelope] = useState<boolean>(false);
 
+  // 🎵 Zvuky
+  const [playFly] = useSound('/sounds/envelope-fly.mp3', { volume: 0.5 });
+  const [playButtonClick] = useSound('/sounds/button-click.mp3', { volume: 0.4 });
+  const [playSuccess] = useSound('/sounds/success-chime.mp3', { volume: 0.4 }); // volitelný
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.body.style.backgroundColor = colors.bg;
@@ -55,6 +61,7 @@ function InnerComposePage() {
 
   const send = async (): Promise<void> => {
     setSending(true);
+    playButtonClick(); // 🎵 Kliknutí na tlačítko
 
     try {
       if (mode === 'voice' && audioBlob) {
@@ -110,7 +117,10 @@ function InnerComposePage() {
         throw new Error('No message to send');
       }
 
+      // ✅ Úspěšné odeslání
+      playSuccess?.(); // 🎵 Úspěch (volitelné)
       setShowEnvelope(true);
+      playFly(); // 🎵 Odlet obálky
       
       setTimeout(() => {
         router.push('/');

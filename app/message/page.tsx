@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRandomColor } from '@/hooks/useRandomColor';
+import useSound from 'use-sound';
 
 interface Message {
   type: 'text' | 'voice';
@@ -15,10 +16,34 @@ export default function MessagePage() {
   const [message, setMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userInteracted, setUserInteracted] = useState(false); // 🔥 Nový stav
   const colors = useRandomColor();
 
+  // 🎵 Zvuky
+  const [playBackground, { stop: stopBackground }] = useSound('/sounds/message-atmosphere.mp3', {
+    volume: 0.3,
+    loop: true, // 🔁 Bude se opakovat
+  });
+  const [playButtonClick] = useSound('/sounds/button-click.mp3', { volume: 0.4 });
+
+  // Spustíme podkres při načtení stránky
   useEffect(() => {
-    // Aplikujeme barvy na document
+    if (!loading && message) {
+      playBackground();
+    }
+    return () => {
+      stopBackground(); // Zastavíme při odchodu
+    };
+  }, [loading, message, playBackground, stopBackground]);
+
+  // Zastavíme podkres při první interakci
+  useEffect(() => {
+    if (userInteracted) {
+      stopBackground();
+    }
+  }, [userInteracted, stopBackground]);
+
+  useEffect(() => {
     if (typeof document !== 'undefined') {
       document.body.style.backgroundColor = colors.bg;
       document.body.style.color = colors.text;
@@ -41,6 +66,12 @@ export default function MessagePage() {
         setLoading(false);
       });
   }, []);
+
+  const handleInteraction = (callback?: () => void) => {
+    setUserInteracted(true);
+    playButtonClick(); // 🎵 Kliknutí
+    if (callback) callback();
+  };
 
   if (loading) {
     return (
@@ -69,6 +100,7 @@ export default function MessagePage() {
           </p>
           <Link
             href="/compose?mode=text"
+            onClick={() => handleInteraction()}
             className="inline-block rounded-full px-8 py-3 transition-colors"
             style={{ 
               borderColor: colors.accent, 
@@ -124,6 +156,7 @@ export default function MessagePage() {
                 borderRadius: '8px',
                 border: `1px solid ${colors.accent}`
               }}
+              onPlay={() => handleInteraction()} // 🎵 Při přehrání taky zastaví podkres
               onError={(e) => {
                 console.error('Audio playback error:', e);
                 setError('Failed to load audio');
@@ -148,6 +181,7 @@ export default function MessagePage() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/compose?mode=text"
+            onClick={() => handleInteraction()}
             className="rounded-full px-6 py-3 transition-colors text-center"
             style={{ 
               borderColor: colors.accent, 
@@ -168,6 +202,7 @@ export default function MessagePage() {
 
           <Link
             href="/compose?mode=voice"
+            onClick={() => handleInteraction()}
             className="rounded-full px-6 py-3 transition-colors text-center"
             style={{ 
               borderColor: colors.accent, 

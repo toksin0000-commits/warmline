@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRandomColor } from '@/hooks/useRandomColor';
+import useSound from 'use-sound';
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
@@ -13,10 +14,18 @@ export default function HomePage() {
   const router = useRouter();
   const colors = useRandomColor();
 
+  // 🎵 Zvuky
+  const [playLand] = useSound('/sounds/envelope-land.mp3', { volume: 0.5 });
+  const [playPulse] = useSound('/sounds/envelope-pulse.mp3', { 
+    volume: 0.6,
+    interrupt: true, // Přeruší předchozí při opakování
+  });
+  const [playOpen] = useSound('/sounds/envelope-open.mp3', { volume: 0.6 });
+  const [playButtonClick] = useSound('/sounds/button-click.mp3', { volume: 0.4 });
+
   useEffect(() => {
     setMounted(true);
     
-    // Aplikujeme barvy na document
     if (typeof document !== 'undefined') {
       document.body.style.backgroundColor = colors.bg;
       document.body.style.color = colors.text;
@@ -25,10 +34,12 @@ export default function HomePage() {
 
   const handleEnter = (e: React.MouseEvent) => {
     e.preventDefault();
+    playButtonClick(); // 🎵 Kliknutí na tlačítko
     setShowEnvelope(true);
   };
 
   const openEnvelope = () => {
+    playOpen(); // 🎵 Otevření obálky
     setEnvelopeOpened(true);
     
     setTimeout(() => {
@@ -36,10 +47,25 @@ export default function HomePage() {
     }, 800);
   };
 
+  // Efekt pro přehrání zvuku při přilétnutí a pulzování
+  useEffect(() => {
+    if (showEnvelope && !envelopeOpened) {
+      playLand(); // 🎵 Přilétnutí
+      
+      // Pulzování se zvukem každých 0.8s
+      const pulseInterval = setInterval(() => {
+        if (!envelopeOpened) {
+          playPulse(); // 🎵 Pulzování
+        }
+      }, 800);
+      
+      return () => clearInterval(pulseInterval);
+    }
+  }, [showEnvelope, envelopeOpened, playLand, playPulse]);
+
   if (showEnvelope) {
     return (
       <div className="flex items-center justify-center h-screen relative overflow-hidden" style={{ backgroundColor: colors.bg, color: colors.text }}>
-        {/* Přilétací obálka - s accent barvou pro rámeček */}
         <motion.div
           initial={{ y: -500, scale: 0.2, opacity: 0, rotate: -10 }}
           animate={{ 
@@ -64,7 +90,6 @@ export default function HomePage() {
             className="relative w-[220px] h-[140px] rounded-lg bg-white overflow-hidden"
             style={{ borderColor: colors.accent }}
           >
-            {/* Flap (chlopeň) */}
             <motion.div
               initial={{ rotateX: 0 }}
               animate={{ rotateX: envelopeOpened ? -180 : 0 }}
@@ -73,7 +98,6 @@ export default function HomePage() {
               style={{ borderColor: colors.accent }}
             />
 
-            {/* Note inside (vzkaz uvnitř) */}
             {envelopeOpened && (
               <motion.div
                 initial={{ y: 60, opacity: 0 }}
@@ -87,7 +111,6 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        {/* Text pod obálkou */}
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -103,7 +126,6 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 relative overflow-hidden" style={{ backgroundColor: colors.bg, color: colors.text }}>
-      {/* Jemné pozadí pro atmosféru - s accent barvou */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full filter blur-3xl" style={{ backgroundColor: colors.accent }} />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full filter blur-3xl" style={{ backgroundColor: colors.accent }} />
