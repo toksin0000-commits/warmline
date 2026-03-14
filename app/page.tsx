@@ -18,7 +18,7 @@ export default function HomePage() {
   // 🎵 Zvuky
   const [playLand] = useSound('/sounds/envelope-land.mp3', { volume: 0.5 });
   const [playPulse] = useSound('/sounds/envelope-pulse.mp3', { 
-    volume: 0.6,
+    volume: 1.0,
     interrupt: true, // Přeruší předchozí při opakování
   });
   const [playOpen] = useSound('/sounds/envelope-open.mp3', { volume: 0.6 });
