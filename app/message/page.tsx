@@ -167,7 +167,7 @@ export default function MessagePage() {
               Your browser does not support the audio element.
             </audio>
             <p className="text-xs text-center" style={{ color: colors.text, opacity: 0.5 }}>
-              Voice message · ~5 seconds
+              Voice message · ~8 seconds
             </p>
           </div>
         )}

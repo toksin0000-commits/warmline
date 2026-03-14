@@ -50,7 +50,7 @@ function InnerComposePage() {
   // 🎵 Zvuky
   const [playFly] = useSound('/sounds/envelope-fly.mp3', { volume: 0.5 });
   const [playButtonClick] = useSound('/sounds/button-click.mp3', { volume: 0.4 });
-  const [playSuccess] = useSound('/sounds/success-chime.mp3', { volume: 0.4 }); // volitelný
+  
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -118,7 +118,7 @@ function InnerComposePage() {
       }
 
       // ✅ Úspěšné odeslání
-      playSuccess?.(); // 🎵 Úspěch (volitelné)
+      
       setShowEnvelope(true);
       playFly(); // 🎵 Odlet obálky
       
@@ -239,7 +239,10 @@ function InnerComposePage() {
         </button>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => {
+            playButtonClick(); // 🎵 Zvuk při kliknutí na Back
+            router.push('/');
+          }}
           disabled={sending || showEnvelope}
           className="mt-4 text-sm w-full transition-colors disabled:opacity-40"
           style={{ color: colors.text, opacity: 0.5 }}

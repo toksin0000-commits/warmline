@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRandomColor } from '@/hooks/useRandomColor';
 import useSound from 'use-sound';
+import Envelope from '@/components/Envelope';
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
@@ -39,7 +40,6 @@ export default function HomePage() {
   };
 
   const openEnvelope = () => {
-    playOpen(); // 🎵 Otevření obálky
     setEnvelopeOpened(true);
     
     setTimeout(() => {
@@ -66,50 +66,14 @@ export default function HomePage() {
   if (showEnvelope) {
     return (
       <div className="flex items-center justify-center h-screen relative overflow-hidden" style={{ backgroundColor: colors.bg, color: colors.text }}>
-        <motion.div
-          initial={{ y: -500, scale: 0.2, opacity: 0, rotate: -10 }}
-          animate={{ 
-            y: 0, 
-            scale: 1, 
-            opacity: 1, 
-            rotate: 0,
-            transition: { duration: 1.4, ease: "easeOut" }
-          }}
-          className="cursor-pointer"
-          onClick={openEnvelope}
-        >
-          <motion.div
-            animate={{
-              scale: envelopeOpened ? 1 : [1, 1.06, 1],
-            }}
-            transition={{
-              duration: envelopeOpened ? 0.2 : 0.8,
-              repeat: envelopeOpened ? 0 : Infinity,
-              ease: "easeInOut"
-            }}
-            className="relative w-[220px] h-[140px] rounded-lg bg-white overflow-hidden"
-            style={{ borderColor: colors.accent }}
-          >
-            <motion.div
-              initial={{ rotateX: 0 }}
-              animate={{ rotateX: envelopeOpened ? -180 : 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
-              className="absolute top-0 left-0 right-0 h-1/2 border-b origin-top bg-white"
-              style={{ borderColor: colors.accent }}
-            />
-
-            {envelopeOpened && (
-              <motion.div
-                initial={{ y: 60, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="absolute inset-0 flex items-center justify-center bg-white"
-              >
-                <p className="text-sm" style={{ color: colors.text }}>Someone sent you this…</p>
-              </motion.div>
-            )}
-          </motion.div>
-        </motion.div>
+        {/* ✅ Envelope komponenta s onPlayOpen pro okamžitý zvuk */}
+        <Envelope 
+          onOpen={openEnvelope}
+          onPlayOpen={playOpen}  // 🎵 TADY - zvuk se spustí hned při kliknutí na obálku
+          envelopeOpened={envelopeOpened}
+          accentColor={colors.accent}
+          textColor={colors.text}
+        />
 
         <motion.div 
           initial={{ opacity: 0 }}
