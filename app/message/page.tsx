@@ -189,32 +189,35 @@ export default function MessagePage() {
         </div>
 
         {message.type === 'text' && message.content && (
-          <div className="min-h-[150px] flex items-center justify-center p-6 rounded-lg" 
-               style={{ 
-                 backgroundColor: `${colors.accent}08`,
-                 border: `1px solid ${colors.accent}20`
-               }}>
-            {isTranslating ? (
-              // ✨ HEZČÍ LOADING STAV
-              <div className="flex flex-col items-center gap-2">
-                <div className="animate-pulse text-lg" style={{ color: colors.accent }}>
-                  Translating...
-                </div>
-                <div className="text-sm opacity-50">✨</div>
-              </div>
-            ) : (
-              <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
-                 style={{ 
-                   color: colors.text,
-                   fontFamily: "'Palatino', 'Georgia', serif",
-                   letterSpacing: '0.02em',
-                   lineHeight: '1.7'
-                 }}>
-                {translatedContent ? `"${translatedContent}"` : `"${message.content}"`}
-              </p>
-            )}
-          </div>
-        )}
+  <div className="min-h-37.5 flex items-center justify-center p-6 rounded-lg" 
+       style={{ 
+         backgroundColor: `${colors.accent}08`,
+         border: `1px solid ${colors.accent}20`
+       }}>
+    {isTranslating ? (
+      <div className="flex flex-col items-center gap-2">
+        <div className="animate-pulse text-lg" style={{ color: colors.accent }}>
+          Translating...
+        </div>
+        <div className="text-sm opacity-50">✨</div>
+      </div>
+    ) : (
+      <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center wrap-break-word" 
+         style={{ 
+           color: colors.text,
+           fontFamily: "'Palatino', 'Georgia', serif",
+           letterSpacing: '0.02em',
+           lineHeight: '1.7'
+         }}>
+        {/* 🔥 Podmíněné uvozovky */}
+        {translatedContent && translatedContent !== message.content 
+          ? translatedContent  // přeložený text → bez uvozovek
+          : `"${message.content}"` // původní text → s uvozovkami
+        }
+      </p>
+    )}
+  </div>
+)}
         
         {message.type === 'text' && translatedContent && !isTranslating && (
           <div className="flex justify-end items-center mt-2 text-xs" style={{ color: colors.accent }}>
