@@ -102,7 +102,7 @@ export default function HomePage() {
         className="text-center z-10"
       >
         <h1 className="text-6xl md:text-7xl font-light mb-4 tracking-wide" style={{ color: colors.text }}>
-          warmline
+          WarmLine
         </h1>
         
         <p className="text-xl mb-12 max-w-md mx-auto leading-relaxed" style={{ color: colors.text, opacity: 0.7 }}>
