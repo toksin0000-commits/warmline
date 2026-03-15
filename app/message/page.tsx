@@ -189,7 +189,7 @@ export default function MessagePage() {
         </div>
 
         {message.type === 'text' && message.content && (
-  <div className="min-h-37.5 flex items-center justify-center p-6 rounded-lg" 
+  <div className="min-h-[150px] flex items-center justify-center p-6 rounded-lg" 
        style={{ 
          backgroundColor: `${colors.accent}08`,
          border: `1px solid ${colors.accent}20`
@@ -202,19 +202,24 @@ export default function MessagePage() {
         <div className="text-sm opacity-50">✨</div>
       </div>
     ) : (
-      <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center wrap-break-word" 
-         style={{ 
-           color: colors.text,
-           fontFamily: "'Palatino', 'Georgia', serif",
-           letterSpacing: '0.02em',
-           lineHeight: '1.7'
-         }}>
-        {/* 🔥 Podmíněné uvozovky */}
-        {translatedContent && translatedContent !== message.content 
-          ? translatedContent  // přeložený text → bez uvozovek
-          : `"${message.content}"` // původní text → s uvozovkami
-        }
-      </p>
+      <div className="w-full">
+        {/* Původní text (menší, nahoře) */}
+        <p className="text-sm mb-2 opacity-60 text-center" 
+           style={{ color: colors.text }}>
+          Original: "{message.content}"
+        </p>
+        
+        {/* Přeložený text (hlavní, větší) */}
+        <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
+           style={{ 
+             color: colors.text,
+             fontFamily: "'Palatino', 'Georgia', serif",
+             letterSpacing: '0.02em',
+             lineHeight: '1.7'
+           }}>
+          {translatedContent || message.content}
+        </p>
+      </div>
     )}
   </div>
 )}
