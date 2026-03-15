@@ -17,11 +17,13 @@ export default function MessagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userInteracted, setUserInteracted] = useState(false);
-  // --- NOVÉ STAVY PRO PŘEKLAD ---
   const [translatedContent, setTranslatedContent] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [detectedSourceLang, setDetectedSourceLang] = useState<string | null>(null);
-  // -----------------------------
+  
+  // 🔥 REF PRO ZABRÁNĚNÍ NÁSOBNÉMU PŘEKLADU
+  const hasTranslatedRef = useRef(false);
+  
   const colors = useRandomColor();
 
   // 🎵 Zvuky
@@ -72,13 +74,14 @@ export default function MessagePage() {
       });
   }, []);
 
-  // --- NOVÝ EFEKT PRO PŘEKLAD ---
+  // --- OPTIMALIZOVANÝ EFEKT PRO PŘEKLAD ---
   useEffect(() => {
-    // Spustí se, když máme textovou zprávu, ještě jsme nepřeložili a zrovna nepřekládáme
-    if (message?.type === 'text' && message.content && !translatedContent && !isTranslating) {
+    // Spustí se jen jednou, když máme textovou zprávu
+    if (message?.type === 'text' && message.content && !hasTranslatedRef.current) {
+      hasTranslatedRef.current = true; // 🔥 Označíme, že už jsme překládali
+      
       const translateMessage = async () => {
         setIsTranslating(true);
-        // Zjistíme preferovaný jazyk prohlížeče (např. 'cs', 'en', 'ja')
         const targetLang = navigator.language.split('-')[0];
 
         try {
@@ -92,7 +95,6 @@ export default function MessagePage() {
           });
 
           if (!response.ok) {
-            // Pokud API selže, jen to zalogujeme a necháme původní text
             const errorData = await response.json();
             console.error('Chyba překladu:', errorData.error);
             return;
@@ -112,8 +114,7 @@ export default function MessagePage() {
 
       translateMessage();
     }
-  }, [message, translatedContent, isTranslating]); // Závislosti: spustí se, když se načte zpráva
-  // ------------------------------
+  }, [message]); // ✅ Závislost jen na message, ne na translatedContent
 
   const handleInteraction = (callback?: () => void) => {
     setUserInteracted(true);
@@ -193,26 +194,34 @@ export default function MessagePage() {
                  backgroundColor: `${colors.accent}08`,
                  border: `1px solid ${colors.accent}20`
                }}>
-            <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
-               style={{ 
-                 color: colors.text,
-                 fontFamily: "'Palatino', 'Georgia', serif",
-                 letterSpacing: '0.02em',
-                 lineHeight: '1.7'
-               }}>
-              {/* --- ZMĚNA: Zobrazíme přeložený text, nebo pokud se překládá, zobrazíme tři tečky, jinak původní text --- */}
-              {isTranslating ? '⋯' : (translatedContent ? `"${translatedContent}"` : `"${message.content}"`)}
-            </p>
+            {isTranslating ? (
+              // ✨ HEZČÍ LOADING STAV
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-pulse text-lg" style={{ color: colors.accent }}>
+                  Translating...
+                </div>
+                <div className="text-sm opacity-50">✨</div>
+              </div>
+            ) : (
+              <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
+                 style={{ 
+                   color: colors.text,
+                   fontFamily: "'Palatino', 'Georgia', serif",
+                   letterSpacing: '0.02em',
+                   lineHeight: '1.7'
+                 }}>
+                {translatedContent ? `"${translatedContent}"` : `"${message.content}"`}
+              </p>
+            )}
           </div>
         )}
-        {/* --- NOVÝ INDIKÁTOR PŘEKLADU --- */}
+        
         {message.type === 'text' && translatedContent && !isTranslating && (
           <div className="flex justify-end items-center mt-2 text-xs" style={{ color: colors.accent }}>
-            <span>🌐 Přeloženo</span>
-            {detectedSourceLang && <span className="ml-1 opacity-70">(z {detectedSourceLang.toUpperCase()})</span>}
+            <span>🌐 Translated</span>
+            {detectedSourceLang && <span className="ml-1 opacity-70">(from {detectedSourceLang.toUpperCase()})</span>}
           </div>
         )}
-        {/* ------------------------------ */}
 
         {message.type === 'voice' && message.voiceUrl && (
           <div className="space-y-3">
