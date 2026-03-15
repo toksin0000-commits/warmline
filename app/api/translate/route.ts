@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
+    // 🔍 DEBUG: Výpis proměnných prostředí
+    console.log('🔍 AZURE_TRANSLATOR_KEY exists:', !!process.env.AZURE_TRANSLATOR_KEY);
+    console.log('🔍 AZURE_TRANSLATOR_ENDPOINT:', process.env.AZURE_TRANSLATOR_ENDPOINT);
+    console.log('🔍 AZURE_TRANSLATOR_REGION:', process.env.AZURE_TRANSLATOR_REGION);
+
     // 1. Přečteme data, která nám pošle frontend (prohlížeč)
     const { text, targetLanguage } = await req.json();
+    console.log('🔍 Přijatý text:', text, 'Cílový jazyk:', targetLanguage);
 
     // 2. Základní validace
     if (!text || !targetLanguage) {
@@ -19,7 +25,7 @@ export async function POST(req: Request) {
     const region = process.env.AZURE_TRANSLATOR_REGION;
 
     if (!apiKey || !endpoint) {
-      console.error('Chybí konfigurace API klíče nebo endpointu.');
+      console.error('❌ Chybí konfigurace API klíče nebo endpointu.');
       return NextResponse.json(
         { error: 'Chyba konfigurace serveru' },
         { status: 500 }
@@ -30,32 +36,32 @@ export async function POST(req: Request) {
     const url = new URL('/translate', endpoint);
     url.searchParams.append('api-version', '3.0');
     url.searchParams.append('to', targetLanguage);
-    // Volitelně: můžeme přidat 'from' pro specifikaci zdrojového jazyka,
-    // pokud ho známe. Jinak ho Azure detekuje automaticky.
+    console.log('🔍 Volám Azure URL:', url.toString());
 
     // 5. Zavoláme Azure Translator API
     const azureResponse = await fetch(url.toString(), {
       method: 'POST',
       headers: {
         'Ocp-Apim-Subscription-Key': apiKey,
-        'Ocp-Apim-Subscription-Region': region || '', // Některé regiony to vyžadují
+        'Ocp-Apim-Subscription-Region': region || '',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify([{ text }]), // API očekává pole textů
+      body: JSON.stringify([{ text }]),
     });
 
     // 6. Zpracujeme odpověď z Azure
     if (!azureResponse.ok) {
       const errorText = await azureResponse.text();
-      console.error('Chyba od Azure API:', azureResponse.status, errorText);
+      console.error('❌ Chyba od Azure API:', azureResponse.status, errorText);
       return NextResponse.json(
-        { error: 'Překlad se nezdařil' },
+        { error: `Překlad se nezdařil: ${azureResponse.status}` },
         { status: 500 }
       );
     }
 
     const azureData = await azureResponse.json();
-    // Odpověď je pole objektů, my bereme první překlad z prvního výsledku
+    console.log('🔍 Odpověď z Azure:', JSON.stringify(azureData, null, 2));
+
     const translatedText = azureData[0]?.translations[0]?.text;
 
     if (!translatedText) {
@@ -66,9 +72,11 @@ export async function POST(req: Request) {
     }
 
     // 7. Pošleme přeložený text zpět do prohlížeče
+    console.log('✅ Překlad úspěšný:', translatedText);
     return NextResponse.json({ translatedText });
+    
   } catch (error) {
-    console.error('Neočekávaná chyba při překladu:', error);
+    console.error('❌ Neočekávaná chyba při překladu:', error);
     return NextResponse.json(
       { error: 'Interní chyba serveru' },
       { status: 500 }
