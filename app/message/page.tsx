@@ -16,13 +16,18 @@ export default function MessagePage() {
   const [message, setMessage] = useState<Message | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userInteracted, setUserInteracted] = useState(false); // 🔥 Nový stav
+  const [userInteracted, setUserInteracted] = useState(false);
+  // --- NOVÉ STAVY PRO PŘEKLAD ---
+  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [detectedSourceLang, setDetectedSourceLang] = useState<string | null>(null);
+  // -----------------------------
   const colors = useRandomColor();
 
   // 🎵 Zvuky
   const [playBackground, { stop: stopBackground }] = useSound('/sounds/message-atmosphere.mp3', {
     volume: 0.3,
-    loop: true, // 🔁 Bude se opakovat
+    loop: true,
   });
   const [playButtonClick] = useSound('/sounds/button-click.mp3', { volume: 0.4 });
 
@@ -32,7 +37,7 @@ export default function MessagePage() {
       playBackground();
     }
     return () => {
-      stopBackground(); // Zastavíme při odchodu
+      stopBackground();
     };
   }, [loading, message, playBackground, stopBackground]);
 
@@ -67,9 +72,52 @@ export default function MessagePage() {
       });
   }, []);
 
+  // --- NOVÝ EFEKT PRO PŘEKLAD ---
+  useEffect(() => {
+    // Spustí se, když máme textovou zprávu, ještě jsme nepřeložili a zrovna nepřekládáme
+    if (message?.type === 'text' && message.content && !translatedContent && !isTranslating) {
+      const translateMessage = async () => {
+        setIsTranslating(true);
+        // Zjistíme preferovaný jazyk prohlížeče (např. 'cs', 'en', 'ja')
+        const targetLang = navigator.language.split('-')[0];
+
+        try {
+          const response = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: message.content,
+              targetLanguage: targetLang,
+            }),
+          });
+
+          if (!response.ok) {
+            // Pokud API selže, jen to zalogujeme a necháme původní text
+            const errorData = await response.json();
+            console.error('Chyba překladu:', errorData.error);
+            return;
+          }
+
+          const data = await response.json();
+          setTranslatedContent(data.translatedText);
+          if (data.detectedSourceLanguage) {
+            setDetectedSourceLang(data.detectedSourceLanguage);
+          }
+        } catch (error) {
+          console.error('Chyba při volání překladové API:', error);
+        } finally {
+          setIsTranslating(false);
+        }
+      };
+
+      translateMessage();
+    }
+  }, [message, translatedContent, isTranslating]); // Závislosti: spustí se, když se načte zpráva
+  // ------------------------------
+
   const handleInteraction = (callback?: () => void) => {
     setUserInteracted(true);
-    playButtonClick(); // 🎵 Kliknutí
+    playButtonClick();
     if (callback) callback();
   };
 
@@ -140,22 +188,31 @@ export default function MessagePage() {
         </div>
 
         {message.type === 'text' && message.content && (
-  <div className="min-h-[150px] flex items-center justify-center p-6 rounded-lg" 
-       style={{ 
-         backgroundColor: `${colors.accent}08`,
-         border: `1px solid ${colors.accent}20`
-       }}>
-    <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
-       style={{ 
-         color: colors.text,
-         fontFamily: "'Palatino', 'Georgia', serif",
-         letterSpacing: '0.02em',
-         lineHeight: '1.7'
-       }}>
-      "{message.content}"
-    </p>
-  </div>
-)}
+          <div className="min-h-[150px] flex items-center justify-center p-6 rounded-lg" 
+               style={{ 
+                 backgroundColor: `${colors.accent}08`,
+                 border: `1px solid ${colors.accent}20`
+               }}>
+            <p className="text-2xl md:text-4xl font-light italic leading-relaxed text-center break-words" 
+               style={{ 
+                 color: colors.text,
+                 fontFamily: "'Palatino', 'Georgia', serif",
+                 letterSpacing: '0.02em',
+                 lineHeight: '1.7'
+               }}>
+              {/* --- ZMĚNA: Zobrazíme přeložený text, nebo pokud se překládá, zobrazíme tři tečky, jinak původní text --- */}
+              {isTranslating ? '⋯' : (translatedContent ? `"${translatedContent}"` : `"${message.content}"`)}
+            </p>
+          </div>
+        )}
+        {/* --- NOVÝ INDIKÁTOR PŘEKLADU --- */}
+        {message.type === 'text' && translatedContent && !isTranslating && (
+          <div className="flex justify-end items-center mt-2 text-xs" style={{ color: colors.accent }}>
+            <span>🌐 Přeloženo</span>
+            {detectedSourceLang && <span className="ml-1 opacity-70">(z {detectedSourceLang.toUpperCase()})</span>}
+          </div>
+        )}
+        {/* ------------------------------ */}
 
         {message.type === 'voice' && message.voiceUrl && (
           <div className="space-y-3">
@@ -166,7 +223,7 @@ export default function MessagePage() {
                 borderRadius: '8px',
                 border: `1px solid ${colors.accent}`
               }}
-              onPlay={() => handleInteraction()} // 🎵 Při přehrání taky zastaví podkres
+              onPlay={() => handleInteraction()}
               onError={(e) => {
                 console.error('Audio playback error:', e);
                 setError('Failed to load audio');
